@@ -1,0 +1,136 @@
+enum Gender {
+  ذكر
+  انثى
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+  GUARDIAN
+}
+
+model User {
+  id             Int       @id @default(autoincrement())
+  userName       String    @unique
+  phoneNumber    String    @unique
+  password       String
+  displayName    String
+  profilePicture String?
+  gender         Gender
+  student        Student?
+  Teacher        Teacher?
+  admin          Admin?
+  role           Role      @default(STUDENT)
+  Guardian       Guardian?
+  refreshToken   String?
+}
+
+model Student {
+  id   Int  @id
+  user User @relation(fields: [id], references: [id], onDelete: Cascade)
+
+  government          Government     @relation(fields: [governmentId], references: [id])
+  governmentId        Int
+  guardian            Guardian?      @relation(fields: [parentPhoneNumber], references: [phoneNumber])
+  city                City           @relation(fields: [cityId], references: [id])
+  cityId              Int
+  educationType       EducationType  @relation(fields: [educationTypeId], references: [id])
+  educationTypeId     Int
+  secondLang          SecondLanguage @relation(fields: [secondLangId], references: [id])
+  secondLangId        Int
+  schoolType          SchoolType     @relation(fields: [schoolTypeId], references: [id])
+  schoolTypeId        Int
+  department          Department     @relation(fields: [departmentId], references: [id])
+  departmentId        Int
+  parentPhoneNumber   String
+  isGurardianVerified Boolean        @default(false)
+  grade               Grade          @relation(fields: [gradeId], references: [id])
+  gradeId             Int
+  devision            Devision       @relation(fields: [devisionId], references: [id])
+  devisionId          Int
+  schoolName          String
+}
+
+model Government {
+  id      Int       @id @default(autoincrement())
+  name    String    @unique
+  cities  City[]
+  Student Student[]
+}
+
+model City {
+  id           Int        @id @default(autoincrement())
+  name         String
+  government   Government @relation(fields: [governmentId], references: [id])
+  governmentId Int
+  students     Student[]
+}
+
+model EducationType {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  students Student[]
+}
+
+model Devision {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  students Student[]
+  teachers Teacher[]
+}
+
+model SecondLanguage {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  students Student[]
+}
+
+model SchoolType {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  students Student[]
+}
+
+model Department {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  students Student[]
+  Teacher  Teacher[]
+}
+
+model Grade {
+  id       Int       @id @default(autoincrement())
+  name     String    @unique
+  students Student[]
+  Teacher  Teacher[]
+  courses  Course[]
+}
+
+model Teacher {
+  id           Int        @id @default(autoincrement())
+  user         User       @relation(fields: [id], references: [id], onDelete: Cascade)
+  subject      String
+  bio          String?
+  socialMedia  String?    @default("{}")
+  grade        Grade[]
+  devision     Devision[]
+  department   Department @relation(fields: [departmentId], references: [id])
+  departmentId Int
+  isActive     Boolean    @default(false)
+}
+
+model Guardian {
+  id          Int       @id
+  user        User      @relation(fields: [id], references: [id], onDelete: Cascade)
+  phoneNumber String    @unique
+  students    Student[]
+
+  @@map("guardians")
+}
+
+model Admin {
+  id                  Int     @id @default(autoincrement())
+  user                User    @relation(fields: [id], references: [id], onDelete: Cascade)
+  teacherRegistration Boolean @default(true)
+}

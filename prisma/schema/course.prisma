@@ -1,0 +1,43 @@
+enum CourseType {
+  حصة
+  شهرى
+  سنوى
+}
+
+model Course {
+  id         Int        @id @default(autoincrement())
+  courseName String
+  courseType CourseType
+  thumbnail  String
+  price      Int
+  teacherId  Int
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  grade      Grade      @relation(fields: [gradeId], references: [id])
+  gradeId    Int
+}
+
+model Lecture {
+  id             Int              @id @default(autoincrement())
+  lectureName    String
+  orderIndex     Int
+  courseId       Int
+  LectureContent LectureContent[]
+}
+
+model LectureContent {
+  id          Int         @id @default(autoincrement())
+  lectureId   Int
+  lecture     Lecture     @relation(fields: [lectureId], references: [id])
+  contentType ContentType
+  contentUrl  String
+  duration    Int?
+  createdAt   DateTime    @default(now())
+  content     String
+  orderIndex  Int
+}
+
+enum ContentType {
+  Video
+  file
+}
