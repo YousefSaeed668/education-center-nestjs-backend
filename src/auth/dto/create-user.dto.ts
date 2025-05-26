@@ -10,6 +10,8 @@ import {
   IsPhoneNumber,
   IsString,
   IsStrongPassword,
+  Matches,
+  MaxLength,
   MinLength,
 } from 'class-validator';
 export enum Gender {
@@ -17,10 +19,13 @@ export enum Gender {
   Female = 'انثى',
 }
 
-class CreateUserDto {
+export class CreateUserDto {
   @IsString()
-  @IsNotEmpty()
   @MinLength(3, { message: 'Username must be at least 3 characters long' })
+  @MaxLength(20, { message: 'Username must not exceed 20 characters' })
+  @Matches(/^[a-zA-Z0-9_]+$/, {
+    message: 'Username can only contain letters, numbers, and underscores',
+  })
   userName: string;
 
   @IsPhoneNumber('EG')
@@ -45,14 +50,20 @@ export class CreateTeacherDto extends CreateUserDto {
   @IsNotEmpty()
   subject: string;
 
-  @IsArray({ message: 'Devision must be an array of IDs' })
-  @ArrayNotEmpty({ message: 'At least one devision must be selected' })
-  @ArrayMinSize(1, { message: 'Select at least one devision' })
-  @IsInt({ each: true, message: 'Each devision ID must be an integer' })
-  devisionId: number[];
+  @IsArray({ message: 'Division must be an array of IDs' })
+  @ArrayNotEmpty({ message: 'At least one division must be selected' })
+  @ArrayMinSize(1, { message: 'Select at least one division' })
+  @IsInt({ each: true, message: 'Each grade ID must be an integer' })
+  divisionIds: number[];
+
+  @IsArray({ message: 'Grade must be an array of IDs' })
+  @ArrayNotEmpty({ message: 'At least one grade must be selected' })
+  @ArrayMinSize(1, { message: 'Select at least one grade' })
+  @IsInt({ each: true, message: 'Each grade ID must be an integer' })
+  gradeIds: number[];
 
   @IsInt()
-  departmentId: number;
+  educationTypeId: number;
 }
 
 export class CreateStudentDto extends CreateUserDto {
@@ -73,9 +84,6 @@ export class CreateStudentDto extends CreateUserDto {
   @IsInt()
   schoolTypeId: number;
 
-  @IsInt()
-  departmentId: number;
-
   @IsPhoneNumber('EG')
   parentPhoneNumber: string;
 
@@ -91,9 +99,4 @@ export class CreateStudentDto extends CreateUserDto {
   @IsString()
   @IsNotEmpty()
   schoolName: string;
-}
-
-export class CreateGuardianDto extends CreateUserDto {
-  @IsPhoneNumber('EG')
-  declare phoneNumber: string;
 }

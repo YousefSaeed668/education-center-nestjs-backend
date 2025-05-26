@@ -1,9 +1,9 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
-  CreateGuardianDto,
   CreateStudentDto,
   CreateTeacherDto,
+  CreateUserDto,
 } from './dto/create-user.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { Public } from './decorators/public.decorator';
@@ -25,11 +25,12 @@ export class AuthController {
   }
 
   @Public()
-  @Post('/signup/CreateGuardianDto')
-  signupGuardian(@Body() body: CreateGuardianDto) {
+  @Post('/signup/guardian')
+  signupGuardian(@Body() body: CreateUserDto) {
     return this.authService.signupGuardian(body);
   }
 
+  @Public()
   @UseGuards(LocalAuthGuard)
   @Post('/login')
   login(@Req() req) {

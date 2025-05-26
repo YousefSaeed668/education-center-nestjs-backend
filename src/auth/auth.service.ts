@@ -3,11 +3,12 @@ import {
   Injectable,
   UnauthorizedException,
   Inject,
+  BadRequestException,
 } from '@nestjs/common';
 import {
-  CreateGuardianDto,
   CreateStudentDto,
   CreateTeacherDto,
+  CreateUserDto,
 } from './dto/create-user.dto';
 import { PrismaService } from 'src/prisma.service';
 import { UserService } from 'src/user/user.service';
@@ -31,11 +32,12 @@ export class AuthService {
       createStudentDto.userName,
     );
     if (user) {
-      throw new ConflictException('This isername is already taken');
+      throw new ConflictException('This username is already taken');
     }
     const { password, ...data } = createStudentDto;
     const hashedPassword = await bcrypt.hash(password, 10);
     const { displayName, userName, gender, phoneNumber, ...studentData } = data;
+
     const newStudent = await this.prisma.user.create({
       data: {
         displayName,
@@ -43,7 +45,6 @@ export class AuthService {
         gender,
         phoneNumber,
         password: hashedPassword,
-
         student: {
           create: {
             ...studentData,
@@ -51,6 +52,7 @@ export class AuthService {
         },
       },
     });
+
     return newStudent;
   }
   async signupTeacher(createTeacherDto: CreateTeacherDto) {
@@ -60,9 +62,19 @@ export class AuthService {
     if (user) {
       throw new ConflictException('This username is already taken');
     }
-    const { password, ...data } = createTeacherDto;
+    const {
+      password,
+      displayName,
+      userName,
+      gender,
+      phoneNumber,
+      subject,
+      educationTypeId,
+      divisionIds,
+      gradeIds,
+    } = createTeacherDto;
     const hashedPassword = await bcrypt.hash(password, 10);
-    const { displayName, userName, gender, phoneNumber, ...teacherData } = data;
+
     const newTeacher = await this.prisma.user.create({
       data: {
         displayName,
@@ -73,19 +85,35 @@ export class AuthService {
         role: 'TEACHER',
         Teacher: {
           create: {
-            ...teacherData,
+            subject,
+            educationTypeId,
+            division: {
+              connect: divisionIds.map((id) => ({ id })),
+            },
+            grade: {
+              connect: gradeIds.map((id) => ({ id })),
+            },
           },
         },
       },
     });
     return newTeacher;
   }
-  async signupGuardian(CreateGuardianDto: CreateGuardianDto) {
+  async signupGuardian(CreateGuardianDto: CreateUserDto) {
     const user = await this.userService.findUserByUsername(
       CreateGuardianDto.userName,
     );
     if (user) {
       throw new ConflictException('This username is already taken');
+    }
+    const studentsWithThisPhone = await this.prisma.student.findMany({
+      where: { parentPhoneNumber: CreateGuardianDto.phoneNumber },
+    });
+
+    if (studentsWithThisPhone.length === 0) {
+      throw new BadRequestException(
+        'No students found with this phone number. Students must register first.',
+      );
     }
     const { password, ...data } = CreateGuardianDto;
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -145,6 +173,7 @@ export class AuthService {
       this.jwtService.signAsync(payload),
       this.jwtService.signAsync(payload, this.refreshTokenConfig),
     ]);
+
     return { accessToken, refreshToken };
   }
   async validateJwtUser(id: number) {

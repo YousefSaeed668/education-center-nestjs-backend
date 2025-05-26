@@ -15,6 +15,8 @@ model Course {
   updatedAt  DateTime   @updatedAt
   grade      Grade      @relation(fields: [gradeId], references: [id])
   gradeId    Int
+  lectures   Lecture[]
+  Teacher    Teacher    @relation(fields: [teacherId], references: [id])
 }
 
 model Lecture {
@@ -23,6 +25,7 @@ model Lecture {
   orderIndex     Int
   courseId       Int
   LectureContent LectureContent[]
+  Course         Course           @relation(fields: [courseId], references: [id])
 }
 
 model LectureContent {

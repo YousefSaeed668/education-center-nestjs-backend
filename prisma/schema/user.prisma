@@ -30,24 +30,24 @@ model Student {
   id   Int  @id
   user User @relation(fields: [id], references: [id], onDelete: Cascade)
 
-  government          Government     @relation(fields: [governmentId], references: [id])
-  governmentId        Int
-  guardian            Guardian?      @relation(fields: [parentPhoneNumber], references: [phoneNumber])
-  city                City           @relation(fields: [cityId], references: [id])
-  cityId              Int
-  educationType       EducationType  @relation(fields: [educationTypeId], references: [id])
-  educationTypeId     Int
-  secondLang          SecondLanguage @relation(fields: [secondLangId], references: [id])
-  secondLangId        Int
-  schoolType          SchoolType     @relation(fields: [schoolTypeId], references: [id])
-  schoolTypeId        Int
-  department          Department     @relation(fields: [departmentId], references: [id])
-  departmentId        Int
+  government      Government     @relation(fields: [governmentId], references: [id])
+  governmentId    Int
+  city            City           @relation(fields: [cityId], references: [id])
+  cityId          Int
+  educationType   EducationType  @relation(fields: [educationTypeId], references: [id])
+  educationTypeId Int
+  secondLang      SecondLanguage @relation(fields: [secondLangId], references: [id])
+  secondLangId    Int
+  schoolType      SchoolType     @relation(fields: [schoolTypeId], references: [id])
+  schoolTypeId    Int
+
+  guardian            Guardian? @relation(fields: [guardianId], references: [id])
+  guardianId          Int?
   parentPhoneNumber   String
-  isGurardianVerified Boolean        @default(false)
-  grade               Grade          @relation(fields: [gradeId], references: [id])
+  isGurardianVerified Boolean   @default(false)
+  grade               Grade     @relation(fields: [gradeId], references: [id])
   gradeId             Int
-  devision            Devision       @relation(fields: [devisionId], references: [id])
+  division            Division  @relation(fields: [devisionId], references: [id])
   devisionId          Int
   schoolName          String
 }
@@ -65,19 +65,27 @@ model City {
   government   Government @relation(fields: [governmentId], references: [id])
   governmentId Int
   students     Student[]
+
+  @@unique([name, governmentId])
 }
 
 model EducationType {
   id       Int       @id @default(autoincrement())
   name     String    @unique
   students Student[]
+  grade    Grade[]
+  Teacher  Teacher[]
 }
 
-model Devision {
+model Division {
   id       Int       @id @default(autoincrement())
-  name     String    @unique
+  name     String
   students Student[]
   teachers Teacher[]
+  grade    Grade     @relation(fields: [gradeId], references: [id])
+  gradeId  Int
+
+  @@unique([gradeId, name])
 }
 
 model SecondLanguage {
@@ -92,32 +100,31 @@ model SchoolType {
   students Student[]
 }
 
-model Department {
-  id       Int       @id @default(autoincrement())
-  name     String    @unique
-  students Student[]
-  Teacher  Teacher[]
-}
-
 model Grade {
-  id       Int       @id @default(autoincrement())
-  name     String    @unique
-  students Student[]
-  Teacher  Teacher[]
-  courses  Course[]
+  id              Int           @id @default(autoincrement())
+  name            String
+  educationType   EducationType @relation(fields: [educationTypeId], references: [id])
+  educationTypeId Int
+  division        Division[]
+  students        Student[]
+  Teacher         Teacher[]
+  courses         Course[]
+
+  @@unique([educationTypeId, name])
 }
 
 model Teacher {
-  id           Int        @id @default(autoincrement())
-  user         User       @relation(fields: [id], references: [id], onDelete: Cascade)
-  subject      String
-  bio          String?
-  socialMedia  String?    @default("{}")
-  grade        Grade[]
-  devision     Devision[]
-  department   Department @relation(fields: [departmentId], references: [id])
-  departmentId Int
-  isActive     Boolean    @default(false)
+  id              Int           @id
+  user            User          @relation(fields: [id], references: [id], onDelete: Cascade)
+  subject         String
+  bio             String?
+  socialMedia     String?       @default("{}")
+  educationType   EducationType @relation(fields: [educationTypeId], references: [id])
+  educationTypeId Int
+  grade           Grade[]
+  division        Division[]
+  isActive        Boolean       @default(false)
+  courses         Course[]
 }
 
 model Guardian {
@@ -125,12 +132,10 @@ model Guardian {
   user        User      @relation(fields: [id], references: [id], onDelete: Cascade)
   phoneNumber String    @unique
   students    Student[]
-
-  @@map("guardians")
 }
 
 model Admin {
-  id                  Int     @id @default(autoincrement())
+  id                  Int     @id
   user                User    @relation(fields: [id], references: [id], onDelete: Cascade)
   teacherRegistration Boolean @default(true)
 }
