@@ -118,7 +118,7 @@ model Teacher {
   user            User          @relation(fields: [id], references: [id], onDelete: Cascade)
   subject         String
   bio             String?
-  socialMedia     String?       @default("{}")
+  socialMedia     Json?         @default("{}")
   educationType   EducationType @relation(fields: [educationTypeId], references: [id])
   educationTypeId Int
   grade           Grade[]
