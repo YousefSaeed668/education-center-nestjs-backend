@@ -9,6 +9,7 @@ import { TeacherModule } from './teacher/teacher.module';
 import { S3Module } from './s3/s3.module';
 import { CommonModule } from './common/common.module';
 import { CourseModule } from './course/course.module';
+import { LectureModule } from './lecture/lecture.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { CourseModule } from './course/course.module';
     S3Module,
     CommonModule,
     CourseModule,
+    LectureModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

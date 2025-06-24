@@ -41,15 +41,15 @@ model Student {
   schoolType      SchoolType     @relation(fields: [schoolTypeId], references: [id])
   schoolTypeId    Int
 
-  guardian            Guardian? @relation(fields: [guardianId], references: [id])
-  guardianId          Int?
-  parentPhoneNumber   String
-  isGurardianVerified Boolean   @default(false)
-  grade               Grade     @relation(fields: [gradeId], references: [id])
-  gradeId             Int
-  division            Division  @relation(fields: [devisionId], references: [id])
-  devisionId          Int
-  schoolName          String
+  guardian           Guardian? @relation(fields: [guardianId], references: [id])
+  guardianId         Int?
+  parentPhoneNumber  String
+  isGuardianVerified Boolean   @default(false)
+  grade              Grade     @relation(fields: [gradeId], references: [id])
+  gradeId            Int
+  division           Division  @relation(fields: [divisionId], references: [id])
+  divisionId         Int
+  schoolName         String
 }
 
 model Government {
@@ -82,6 +82,8 @@ model Division {
   name     String
   students Student[]
   teachers Teacher[]
+  courses  Course[]
+  lectures Lecture[]
   grade    Grade     @relation(fields: [gradeId], references: [id])
   gradeId  Int
 
@@ -109,6 +111,7 @@ model Grade {
   students        Student[]
   Teacher         Teacher[]
   courses         Course[]
+  lecture         Lecture[]
 
   @@unique([educationTypeId, name])
 }
@@ -125,6 +128,7 @@ model Teacher {
   division        Division[]
   isActive        Boolean       @default(false)
   courses         Course[]
+  Lecture         Lecture[]
 }
 
 model Guardian {

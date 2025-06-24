@@ -5,42 +5,64 @@ enum CourseType {
 }
 
 model Course {
-  id         Int        @id @default(autoincrement())
-  courseName String
-  courseType CourseType
-  thumbnail  String
-  price      Int
-  teacherId  Int
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
-  grade      Grade      @relation(fields: [gradeId], references: [id])
-  gradeId    Int
-  lectures   Lecture[]
-  Teacher    Teacher    @relation(fields: [teacherId], references: [id])
+  id             Int             @id @default(autoincrement())
+  courseName     String
+  description    String?
+  courseType     CourseType
+  thumbnail      String
+  price          Int
+  teacherId      Int
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  grade          Grade           @relation(fields: [gradeId], references: [id])
+  gradeId        Int
+  Teacher        Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  CourseLecture  CourseLecture[]
+  Division       Division?       @relation(fields: [divisionId], references: [id])
+  divisionId     Int?
+  courseFeatures String[]
+}
+
+model CourseLecture {
+  id         Int @id @default(autoincrement())
+  courseId   Int
+  lectureId  Int
+  orderIndex Int
+
+  course  Course  @relation(fields: [courseId], references: [id])
+  lecture Lecture @relation(fields: [lectureId], references: [id])
+
+  @@unique([courseId, lectureId])
 }
 
 model Lecture {
   id             Int              @id @default(autoincrement())
   lectureName    String
-  orderIndex     Int
-  courseId       Int
   LectureContent LectureContent[]
-  Course         Course           @relation(fields: [courseId], references: [id])
+  CourseLecture  CourseLecture[]
+  Grade          Grade?           @relation(fields: [gradeId], references: [id])
+  gradeId        Int?
+  Division       Division?        @relation(fields: [divisionId], references: [id])
+  divisionId     Int?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  teacherId      Int
+  Teacher        Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
 }
 
 model LectureContent {
   id          Int         @id @default(autoincrement())
   lectureId   Int
-  lecture     Lecture     @relation(fields: [lectureId], references: [id])
+  lecture     Lecture     @relation(fields: [lectureId], references: [id], onDelete: Cascade)
   contentType ContentType
   contentUrl  String
   duration    Int?
   createdAt   DateTime    @default(now())
-  content     String
+  contentName String
   orderIndex  Int
 }
 
 enum ContentType {
-  Video
-  file
+  VIDEO
+  FILE
 }

@@ -14,6 +14,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
+
 export enum Gender {
   Male = 'ذكر',
   Female = 'انثى',
@@ -21,10 +22,10 @@ export enum Gender {
 
 export class CreateUserDto {
   @IsString()
-  @MinLength(3, { message: 'Username must be at least 3 characters long' })
-  @MaxLength(20, { message: 'Username must not exceed 20 characters' })
+  @MinLength(3, { message: 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل' })
+  @MaxLength(20, { message: 'اسم المستخدم يجب ألا يتجاوز 20 حرف' })
   @Matches(/^[a-zA-Z0-9_]+$/, {
-    message: 'Username can only contain letters, numbers, and underscores',
+    message: 'اسم المستخدم يمكن أن يحتوي على حروف وأرقام وشرطة سفلية فقط',
   })
   userName: string;
 
@@ -38,10 +39,10 @@ export class CreateUserDto {
 
   @IsString()
   @IsNotEmpty()
-  @MinLength(8, { message: 'Name must be at least 8 characters long' })
+  @MinLength(8, { message: 'الاسم يجب أن يكون 8 أحرف على الأقل' })
   displayName: string;
 
-  @IsEnum(Gender, { message: 'Gender must be one of: male, female' })
+  @IsEnum(Gender, { message: 'الجنس يجب أن يكون أحد: ذكر، انثى' })
   gender: Gender;
 }
 
@@ -50,16 +51,16 @@ export class CreateTeacherDto extends CreateUserDto {
   @IsNotEmpty()
   subject: string;
 
-  @IsArray({ message: 'Division must be an array of IDs' })
-  @ArrayNotEmpty({ message: 'At least one division must be selected' })
-  @ArrayMinSize(1, { message: 'Select at least one division' })
-  @IsInt({ each: true, message: 'Each grade ID must be an integer' })
+  @IsArray({ message: 'الشعبة يجب أن تكون مصفوفة من المعرفات' })
+  @ArrayNotEmpty({ message: 'يجب اختيار شعبة واحدة على الأقل' })
+  @ArrayMinSize(1, { message: 'اختر شعبة واحدة على الأقل' })
+  @IsInt({ each: true, message: 'كل معرف صف يجب أن يكون رقم صحيح' })
   divisionIds: number[];
 
-  @IsArray({ message: 'Grade must be an array of IDs' })
-  @ArrayNotEmpty({ message: 'At least one grade must be selected' })
-  @ArrayMinSize(1, { message: 'Select at least one grade' })
-  @IsInt({ each: true, message: 'Each grade ID must be an integer' })
+  @IsArray({ message: 'الصف يجب أن يكون مصفوفة من المعرفات' })
+  @ArrayNotEmpty({ message: 'يجب اختيار صف واحد على الأقل' })
+  @ArrayMinSize(1, { message: 'اختر صف واحد على الأقل' })
+  @IsInt({ each: true, message: 'كل معرف صف يجب أن يكون رقم صحيح' })
   gradeIds: number[];
 
   @IsInt()
@@ -88,13 +89,13 @@ export class CreateStudentDto extends CreateUserDto {
   parentPhoneNumber: string;
 
   @IsBoolean()
-  isGurardianVerified: boolean;
+  isGuardianVerified: boolean;
 
   @IsInt()
   gradeId: number;
 
   @IsInt()
-  devisionId: number;
+  divisionId: number;
 
   @IsString()
   @IsNotEmpty()

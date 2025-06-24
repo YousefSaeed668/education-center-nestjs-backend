@@ -6,10 +6,11 @@ export class ImageService {
   async compressImage(
     file: Express.Multer.File,
     resize: { width?: number; height?: number } = {},
+    quality: number = 80,
   ): Promise<Express.Multer.File> {
     const buffer = await sharp(file.buffer)
       .resize(resize)
-      .jpeg({ quality: 70 })
+      .jpeg({ quality: quality || 80 })
       .toBuffer();
 
     return {

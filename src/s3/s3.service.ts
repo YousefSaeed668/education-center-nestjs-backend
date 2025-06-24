@@ -20,7 +20,7 @@ export class S3Service {
     this.bucketName = this.configService.get('S3_BUCKET_NAME')!;
     const s3_region = this.configService.get('S3_REGION');
     if (!s3_region) {
-      throw new Error('S3_REGION not found in environment variables');
+      throw new Error('S3_REGION غير موجود في متغيرات البيئة');
     }
     this.client = new S3Client({
       region: s3_region,
@@ -50,10 +50,6 @@ export class S3Service {
         Key: key,
         Body: file.buffer,
         ContentType: file.mimetype,
-
-        Metadata: {
-          originalName: file.originalname,
-        },
       });
       await this.client.send(command);
       return {
@@ -72,15 +68,27 @@ export class S3Service {
   }
 
   extractKeyFromUrl(url: string): string {
-    const urlObj = new URL(url);
-    if (urlObj.hostname.includes('.s3.amazonaws.com')) {
-      return urlObj.pathname.substring(1);
-    } else if (urlObj.hostname === 's3.amazonaws.com') {
-      const pathParts = urlObj.pathname.split('/');
-      return pathParts.slice(2).join('/');
-    }
+    try {
+      const urlObj = new URL(url);
+      let encodedKey: string;
 
-    throw new Error('Invalid S3 URL format');
+      if (urlObj.hostname.includes('.s3.amazonaws.com')) {
+        encodedKey = urlObj.pathname.substring(1);
+      } else if (urlObj.hostname === 's3.amazonaws.com') {
+        const pathParts = urlObj.pathname.split('/');
+        encodedKey = pathParts.slice(2).join('/');
+      } else if (urlObj.hostname.includes('.s3.')) {
+        encodedKey = urlObj.pathname.substring(1);
+      } else {
+        throw new Error(`تنسيق رابط S3 غير معروف: ${url}`);
+      }
+
+      const decodedKey = decodeURIComponent(encodedKey);
+
+      return decodedKey;
+    } catch (error) {
+      throw new Error(`تنسيق رابط S3 غير صحيح: ${url} - ${error.message}`);
+    }
   }
   async getPresignedSignedUrl(key: string) {
     try {
@@ -104,7 +112,7 @@ export class S3Service {
       return await this.deleteFile(key);
     } catch (error) {
       Logger.error('Error deleting file from S3:', error);
-      throw new Error(`Failed to delete file: ${error.message}`);
+      throw new Error(`فشل في حذف الملف: ${error.message}`);
     }
   }
   async deleteFile(key: string) {
@@ -115,8 +123,7 @@ export class S3Service {
       });
 
       await this.client.send(command);
-
-      return { message: 'File deleted successfully' };
+      return { message: 'تم حذف الملف بنجاح' };
     } catch (error) {
       throw new Error(error);
     }

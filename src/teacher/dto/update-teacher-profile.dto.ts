@@ -55,27 +55,29 @@ function IsSocialMediaJSON(validationOptions?: ValidationOptions) {
           }
         },
         defaultMessage() {
-          return 'Social media must be a valid JSON object with valid URLs for platforms: facebook, instagram, x, linkedIn, youtube';
+          return 'وسائل التواصل الاجتماعي يجب أن تكون كائن JSON صالح مع روابط صحيحة للمنصات: facebook, instagram, x, linkedIn, youtube';
         },
       },
     },
     validationOptions,
   );
 }
+
 export class UpdateTeacherProfileDto {
   @IsOptional()
   @IsPhoneNumber('EG')
   phoneNumber: string;
+
   @IsOptional()
   @IsString()
-  @MinLength(3, { message: 'Username must be at least 3 characters long' })
-  @MaxLength(30, { message: 'Username must not exceed 20 characters' })
+  @MinLength(3, { message: 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل' })
+  @MaxLength(30, { message: 'اسم المستخدم يجب ألا يتجاوز 30 حرف' })
   displayName: string;
 
   @IsOptional()
   @IsString()
-  @MaxLength(160, { message: 'Bio must not exceed 100 characters' })
-  @MinLength(12, { message: 'Bio must be at least 3 characters long' })
+  @MaxLength(160, { message: 'النبذة التعريفية يجب ألا تتجاوز 160 حرف' })
+  @MinLength(12, { message: 'النبذة التعريفية يجب أن تكون 12 حرف على الأقل' })
   bio: string;
 
   @IsOptional()

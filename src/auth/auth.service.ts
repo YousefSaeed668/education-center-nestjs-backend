@@ -32,7 +32,7 @@ export class AuthService {
       createStudentDto.userName,
     );
     if (user) {
-      throw new ConflictException('This username is already taken');
+      throw new ConflictException('اسم المستخدم هذا محجوز بالفعل');
     }
     const { password, ...data } = createStudentDto;
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -60,7 +60,7 @@ export class AuthService {
       createTeacherDto.userName,
     );
     if (user) {
-      throw new ConflictException('This username is already taken');
+      throw new ConflictException('اسم المستخدم هذا محجوز بالفعل');
     }
     const {
       password,
@@ -104,7 +104,7 @@ export class AuthService {
       CreateGuardianDto.userName,
     );
     if (user) {
-      throw new ConflictException('This username is already taken');
+      throw new ConflictException('اسم المستخدم هذا محجوز بالفعل');
     }
     const studentsWithThisPhone = await this.prisma.student.findMany({
       where: { parentPhoneNumber: CreateGuardianDto.phoneNumber },

@@ -1,16 +1,22 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
 import { PrismaExceptionFilter } from './filters/prisma-exception.filter';
+import { MultipartValidationPipe } from './pipes/multipart-validation.pipe';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalPipes(
-    new ValidationPipe({
-      transform: true,
+    new MultipartValidationPipe({
       whitelist: true,
+      transform: true,
     }),
   );
+
+  app.enableCors({
+    origin: '*',
+    credentials: true,
+  });
+
   app.useGlobalFilters(new PrismaExceptionFilter());
 
   await app.listen(process.env.PORT ?? 3000);

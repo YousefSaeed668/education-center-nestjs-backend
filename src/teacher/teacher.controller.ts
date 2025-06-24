@@ -9,19 +9,17 @@ import {
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { TeacherService } from './teacher.service';
-import { Roles } from 'src/auth/decorators/roles.decorator';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { Role } from '@prisma/client';
+import { Roles } from 'src/auth/decorators/roles.decorator';
 import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
-import { S3Service } from 'src/s3/s3.service';
+import { TeacherService } from './teacher.service';
 
 @Controller('teacher')
-@Roles('TEACHER')
+@Roles(Role.TEACHER)
 export class TeacherController {
-  constructor(
-    private readonly teacherService: TeacherService,
-    private readonly s3Service: S3Service,
-  ) {}
+  constructor(private readonly teacherService: TeacherService) {}
+
   @Post('update-profile')
   @UseInterceptors(FileInterceptor('file'))
   updateProfile(

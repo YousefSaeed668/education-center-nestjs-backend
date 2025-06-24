@@ -1,8 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
-import { S3Service } from 'src/s3/s3.service';
-import { PrismaService } from 'src/prisma.service';
+import { Injectable } from '@nestjs/common';
 import { ImageService } from 'src/common/services/image.service';
+import { PrismaService } from 'src/prisma.service';
+import { S3Service } from 'src/s3/s3.service';
+import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 
 @Injectable()
 export class TeacherService {
@@ -53,7 +53,7 @@ export class TeacherService {
         });
       });
       return {
-        message: 'Profile updated successfully',
+        message: 'تم تحديث الملف الشخصي بنجاح',
       };
     } catch (error) {
       if (newProfilePictureUrl && error) {
@@ -72,7 +72,7 @@ export class TeacherService {
     currentProfilePicture: string | null,
     file: Express.Multer.File,
   ) {
-    const compressedFile = await this.imageService.compressImage(file);
+    const compressedFile = await this.imageService.compressImage(file, {}, 80);
     try {
       const { url } = await this.s3Service.uploadSingleFile({
         file: compressedFile,
@@ -89,7 +89,7 @@ export class TeacherService {
       }
       return url;
     } catch (error) {
-      throw new Error(`Failed to update profile picture: ${error.message}`);
+      throw new Error(`فشل في تحديث صورة الملف الشخصي: ${error.message}`);
     }
   }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import {
   CreateStudentDto,
@@ -12,6 +12,7 @@ import { RefreshAuthGuard } from './guards/refresh-auth.guard';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
   @Public()
   @Post('/signup/student')
   signupStudent(@Body() body: CreateStudentDto) {
@@ -48,6 +49,7 @@ export class AuthController {
   refreshToken(@Req() req) {
     return this.authService.refreshToken(req.user.id);
   }
+
   @Post('/signout')
   signOut(@Req() req) {
     return this.authService.signOut(req.user.id);
