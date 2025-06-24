@@ -1,27 +1,28 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { S3Service } from 'src/s3/s3.service';
-import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 import { UserService } from 'src/user/user.service';
+import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
 
 @Injectable()
-export class TeacherService {
+export class StudentService {
   constructor(
     private readonly s3Service: S3Service,
     private readonly prisma: PrismaService,
     private readonly userService: UserService,
   ) {}
+
   async updateProfile(
-    teacherId: number,
-    body: UpdateTeacherProfileDto,
+    studentId: number,
+    body: UpdateStudentProfileDto,
     file?: Express.Multer.File,
   ) {
     let newProfilePictureUrl: string | undefined;
     try {
       if (file) {
         const currentUser = await this.prisma.user.findUnique({
-          where: { id: teacherId },
+          where: { id: studentId },
           select: { profilePicture: true },
         });
 
@@ -29,7 +30,7 @@ export class TeacherService {
           await this.userService.handleProfilePictureUpdate(
             currentUser?.profilePicture || null,
             file,
-            'teacher/profile-picture',
+            'student/profile-picture',
           );
       }
       const userData = HelperFunctionsService.removeUndefined({
@@ -38,28 +39,34 @@ export class TeacherService {
         phoneNumber: body.phoneNumber,
       });
 
-      const teacherData = HelperFunctionsService.removeUndefined({
-        bio: body.bio,
-        socialMedia: body.socialMedia
-          ? JSON.parse(body.socialMedia)
-          : undefined,
+      const studentData = HelperFunctionsService.removeUndefined({
+        governmentId: body.governmentId,
+        cityId: body.cityId,
+        educationTypeId: body.educationTypeId,
+        secondLangId: body.secondLangId,
+        schoolTypeId: body.schoolTypeId,
+        parentPhoneNumber: body.parentPhoneNumber,
+        gradeId: body.gradeId,
+        divisionId: body.divisionId,
+        schoolName: body.schoolName,
       });
       await this.prisma.$transaction(async (tx) => {
         return await tx.user.update({
-          where: { id: teacherId },
+          where: { id: studentId },
           data: {
             ...userData,
-            ...(Object.keys(teacherData).length > 0 && {
-              Teacher: {
-                update: teacherData,
+            ...(Object.keys(studentData).length > 0 && {
+              student: {
+                update: studentData,
               },
             }),
           },
           include: {
-            Teacher: true,
+            student: true,
           },
         });
       });
+
       return {
         message: 'تم تحديث الملف الشخصي بنجاح',
       };

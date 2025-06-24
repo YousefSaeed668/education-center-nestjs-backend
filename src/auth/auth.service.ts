@@ -27,13 +27,32 @@ export class AuthService {
     @Inject(refreshConfig.KEY)
     private refreshTokenConfig: ConfigType<typeof refreshConfig>,
   ) {}
-  async signupStudent(createStudentDto: CreateStudentDto) {
-    const user = await this.userService.findUserByUsername(
-      createStudentDto.userName,
-    );
-    if (user) {
+  private async checkUserConflicts(userName: string, phoneNumber: string) {
+    const [userByUsername, userByPhone] = await Promise.all([
+      this.prisma.user.findUnique({ where: { userName } }),
+      this.prisma.user.findUnique({ where: { phoneNumber } }),
+    ]);
+
+    if (userByUsername && userByPhone) {
+      throw new ConflictException('اسم المستخدم ورقم الهاتف محجوزان بالفعل');
+    }
+
+    if (userByUsername) {
       throw new ConflictException('اسم المستخدم هذا محجوز بالفعل');
     }
+
+    if (userByPhone) {
+      throw new ConflictException('رقم الهاتف هذا محجوز بالفعل');
+    }
+
+    return null;
+  }
+
+  async signupStudent(createStudentDto: CreateStudentDto) {
+    await this.checkUserConflicts(
+      createStudentDto.userName,
+      createStudentDto.phoneNumber,
+    );
     const { password, ...data } = createStudentDto;
     const hashedPassword = await bcrypt.hash(password, 10);
     const { displayName, userName, gender, phoneNumber, ...studentData } = data;
@@ -56,12 +75,10 @@ export class AuthService {
     return newStudent;
   }
   async signupTeacher(createTeacherDto: CreateTeacherDto) {
-    const user = await this.userService.findUserByUsername(
+    await this.checkUserConflicts(
       createTeacherDto.userName,
+      createTeacherDto.phoneNumber,
     );
-    if (user) {
-      throw new ConflictException('اسم المستخدم هذا محجوز بالفعل');
-    }
     const {
       password,
       displayName,
@@ -100,12 +117,10 @@ export class AuthService {
     return newTeacher;
   }
   async signupGuardian(CreateGuardianDto: CreateUserDto) {
-    const user = await this.userService.findUserByUsername(
+    await this.checkUserConflicts(
       CreateGuardianDto.userName,
+      CreateGuardianDto.phoneNumber,
     );
-    if (user) {
-      throw new ConflictException('اسم المستخدم هذا محجوز بالفعل');
-    }
     const studentsWithThisPhone = await this.prisma.student.findMany({
       where: { parentPhoneNumber: CreateGuardianDto.phoneNumber },
     });

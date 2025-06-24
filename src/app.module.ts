@@ -10,6 +10,7 @@ import { S3Module } from './s3/s3.module';
 import { CommonModule } from './common/common.module';
 import { CourseModule } from './course/course.module';
 import { LectureModule } from './lecture/lecture.module';
+import { StudentModule } from './student/student.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { LectureModule } from './lecture/lecture.module';
     CommonModule,
     CourseModule,
     LectureModule,
+    StudentModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

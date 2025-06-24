@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  PipeTransform,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, PipeTransform } from '@nestjs/common';
 import * as sharp from 'sharp';
 
 @Injectable()

@@ -12,11 +12,6 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors({
-    origin: '*',
-    credentials: true,
-  });
-
   app.useGlobalFilters(new PrismaExceptionFilter());
 
   await app.listen(process.env.PORT ?? 3000);
