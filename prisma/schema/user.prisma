@@ -50,6 +50,8 @@ model Student {
   division           Division  @relation(fields: [divisionId], references: [id])
   divisionId         Int
   schoolName         String
+  Cart               Cart?
+  Order              Order[]
 }
 
 model Government {

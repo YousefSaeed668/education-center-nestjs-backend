@@ -11,6 +11,7 @@ import { CommonModule } from './common/common.module';
 import { CourseModule } from './course/course.module';
 import { LectureModule } from './lecture/lecture.module';
 import { StudentModule } from './student/student.module';
+import { CartModule } from './cart/cart.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { StudentModule } from './student/student.module';
     CourseModule,
     LectureModule,
     StudentModule,
+    CartModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],
