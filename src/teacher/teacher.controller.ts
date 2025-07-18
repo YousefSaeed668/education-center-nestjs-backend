@@ -12,6 +12,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 import { TeacherService } from './teacher.service';
+import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
 
 @Controller('teacher')
 @Roles(Role.TEACHER)
@@ -32,5 +33,10 @@ export class TeacherController {
     file: Express.Multer.File,
   ) {
     return this.teacherService.updateProfile(req.user.id, body, file);
+  }
+
+  @Post('withdraw-request')
+  withdrawRequest(@Req() req, @Body() body: CreateWithdrawRequestDto) {
+    return this.teacherService.createWithdrawRequest(req.user.id, body);
   }
 }

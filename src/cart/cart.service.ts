@@ -6,12 +6,121 @@ import {
 } from '@nestjs/common';
 import { ProductType } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
+
 @Injectable()
 export class CartService {
   constructor(private readonly prisma: PrismaService) {}
 
+  async getCart(studentId: number, guardianId?: number) {
+    const cart = await this.prisma.cart.findUnique({
+      where: {
+        studentId,
+      },
+      include: {
+        student: {
+          select: {
+            guardianId: true,
+          },
+        },
+        cartItems: {
+          include: {
+            course: {
+              select: {
+                price: true,
+                courseName: true,
+              },
+            },
+            book: {
+              select: {
+                price: true,
+                bookName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!cart) {
+      throw new NotFoundException('عربة التسوق فارغة');
+    }
+
+    if (guardianId && cart.student.guardianId !== guardianId) {
+      throw new NotFoundException('لا يمكن الوصول إلى عربة التسوق لهذا الطالب');
+    }
+    let totalPrice = 0;
+    const orderedData = cart.cartItems.map((cartItem) => {
+      let price: number;
+      let itemName: string;
+
+      if (cartItem.productType === ProductType.COURSE) {
+        if (!cartItem.course) {
+          throw new NotFoundException(
+            `الكورس غير موجود فى عربية التسوق${cartItem.id}`,
+          );
+        }
+        price = cartItem.course.price.toNumber();
+        itemName = cartItem.course.courseName;
+      } else if (cartItem.productType === ProductType.BOOK) {
+        if (!cartItem.book) {
+          throw new NotFoundException(
+            `الكتاب غير موجود فى عربية التسوق ${cartItem.id}`,
+          );
+        }
+        price = cartItem.book.price.toNumber();
+        itemName = cartItem.book.bookName;
+      } else {
+        throw new BadRequestException('Invalid product type');
+      }
+
+      totalPrice += price * cartItem.quantity;
+
+      return {
+        id: cartItem.id,
+        cartId: cartItem.cartId,
+        productId: cartItem.productId,
+        productType: cartItem.productType,
+        quantity: cartItem.quantity,
+        itemName: itemName,
+        price: price,
+        subtotal: price * cartItem.quantity,
+      };
+    });
+
+    return {
+      id: cart.id,
+      studentId: cart.studentId,
+      cartItems: orderedData,
+      totalPrice: totalPrice,
+    };
+  }
   async addToCart(studentId: number, itemId: number, productType: ProductType) {
     return this.prisma.$transaction(async (tx) => {
+      if (productType === ProductType.COURSE) {
+        const courseExists = await tx.course.findUnique({
+          where: { id: itemId },
+        });
+        if (!courseExists) {
+          throw new NotFoundException('الكورس غير موجود');
+        }
+        const isStudentCourse = await tx.studentCourse.findFirst({
+          where: {
+            studentId: studentId,
+            courseId: itemId,
+          },
+        });
+        if (isStudentCourse) {
+          throw new ConflictException('الكورس موجود بالفعل فى مكتبة الطالب');
+        }
+      } else if (productType === ProductType.BOOK) {
+        const bookExists = await tx.book.findUnique({
+          where: { id: itemId },
+        });
+        if (!bookExists) {
+          throw new NotFoundException('الكتاب غير موجود');
+        }
+      }
+
       let cart = await tx.cart.findUnique({
         where: {
           studentId: studentId,
@@ -26,15 +135,12 @@ export class CartService {
         });
       }
 
-      if (
-        productType === ProductType.COURSE ||
-        productType === ProductType.EBOOK
-      ) {
+      if (productType === ProductType.COURSE) {
         const existingItem = await tx.cartItem.findFirst({
           where: {
             cartId: cart.id,
             productId: itemId,
-            productType: productType,
+            productType,
           },
         });
 
@@ -44,13 +150,21 @@ export class CartService {
           );
         }
 
+        const cartItemData: any = {
+          cartId: cart.id,
+          productId: itemId,
+          productType,
+          quantity: 1,
+        };
+        const data = {
+          ...cartItemData,
+        };
+
+        if (productType === ProductType.COURSE) {
+          data.courseId = itemId;
+        }
         const newItem = await tx.cartItem.create({
-          data: {
-            cartId: cart.id,
-            productId: itemId,
-            productType: productType,
-            quantity: 1,
-          },
+          data,
         });
 
         return {
@@ -91,13 +205,16 @@ export class CartService {
           };
         }
 
+        const cartItemData: any = {
+          cartId: cart.id,
+          bookId: itemId,
+          productId: itemId,
+          productType: ProductType.BOOK,
+          quantity: 1,
+        };
+
         const newItem = await tx.cartItem.create({
-          data: {
-            cartId: cart.id,
-            productId: itemId,
-            productType: ProductType.BOOK,
-            quantity: 1,
-          },
+          data: cartItemData,
         });
 
         return {
@@ -134,7 +251,7 @@ export class CartService {
 
     return {
       success: true,
-      message: `تم حذف ${productType === ProductType.COURSE ? 'الكورس' : productType === ProductType.EBOOK ? 'الكتاب الالكتروني' : 'الكتاب'} من عربة التسوق بنجاح`,
+      message: `تم حذف ${productType === ProductType.COURSE ? 'الكورس' : 'الكتاب'} من عربة التسوق بنجاح`,
       deletedCount: result.count,
     };
   }
@@ -201,5 +318,28 @@ export class CartService {
         data: updatedItem,
       };
     });
+  }
+
+  async clearCart(studentId: number) {
+    const cart = await this.prisma.cart.findUnique({
+      where: {
+        studentId: studentId,
+      },
+    });
+
+    if (!cart) {
+      throw new NotFoundException('عربة التسوق فارغة');
+    }
+
+    await this.prisma.cartItem.deleteMany({
+      where: {
+        cartId: cart.id,
+      },
+    });
+
+    return {
+      success: true,
+      message: 'تم تفريغ عربة التسوق بنجاح',
+    };
   }
 }

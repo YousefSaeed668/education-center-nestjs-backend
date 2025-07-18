@@ -1,7 +1,13 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ImageService } from 'src/common/services/image.service';
 import { PrismaService } from 'src/prisma.service';
 import { S3Service } from 'src/s3/s3.service';
+import { WithdrawUserType } from '@prisma/client';
+import { CreateWithdrawRequestDto } from './dto/create-withdraw-request.dto';
 
 @Injectable()
 export class UserService {
@@ -57,6 +63,66 @@ export class UserService {
       data: {
         refreshToken: hashedRt,
       },
+    });
+  }
+
+  async createWithdrawRequest(
+    userId: number,
+    userType: WithdrawUserType,
+    body: CreateWithdrawRequestDto,
+  ) {
+    return this.prisma.$transaction(async (prisma) => {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: {
+          balance: true,
+        },
+      });
+
+      if (!user) {
+        const userTypeText =
+          userType === WithdrawUserType.STUDENT ? 'الطالب' : 'المعلم';
+        throw new NotFoundException(`${userTypeText} غير موجود`);
+      }
+
+      if (user.balance.lessThan(body.amount)) {
+        const userTypeText =
+          userType === WithdrawUserType.STUDENT ? 'الطالب' : 'المعلم';
+        throw new BadRequestException(
+          `رصيد ${userTypeText} غير كافٍ لإجراء عملية السحب`,
+        );
+      }
+
+      if (body.amount < 10) {
+        throw new BadRequestException('اقل مبلغ للسحب هو 10 جنيهات');
+      }
+
+      const withdrawRequest = await prisma.withdrawRequest.create({
+        data: {
+          amount: body.amount,
+          userId: userId,
+          accountHolderName: body.accountHolderName,
+          notes: body.notes,
+          paymentMethod: body.paymentMethod,
+          userType: userType,
+          phoneNumber: body.phoneNumber,
+        },
+      });
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          balance: {
+            decrement: body.amount,
+          },
+        },
+      });
+
+      return {
+        message: 'تم إنشاء طلب السحب بنجاح',
+        status: 200,
+        data: withdrawRequest,
+      };
     });
   }
 }

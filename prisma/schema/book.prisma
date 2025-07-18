@@ -1,0 +1,17 @@
+model Book {
+  id           Int        @id @default(autoincrement())
+  bookName     String
+  description  String
+  thumbnail    String
+  price        Decimal     @db.Decimal(10, 2)
+  teacherId    Int
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  gradeId      Int
+  divisionId   Int?
+  bookFeatures String[]
+  division     Division?  @relation(fields: [divisionId], references: [id])
+  grade        Grade      @relation(fields: [gradeId], references: [id])
+  teacher      Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  CartItem     CartItem[]
+}

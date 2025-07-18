@@ -58,6 +58,9 @@ export class AuthService {
     const { displayName, userName, gender, phoneNumber, ...studentData } = data;
 
     const newStudent = await this.prisma.user.create({
+      omit: {
+        password: true,
+      },
       data: {
         displayName,
         userName,
@@ -93,6 +96,9 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newTeacher = await this.prisma.user.create({
+      omit: {
+        password: true,
+      },
       data: {
         displayName,
         userName,
@@ -134,6 +140,9 @@ export class AuthService {
     const hashedPassword = await bcrypt.hash(password, 10);
     const { displayName, userName, gender, phoneNumber } = data;
     const newGuardian = await this.prisma.user.create({
+      omit: {
+        password: true,
+      },
       data: {
         displayName,
         userName,

@@ -3,11 +3,18 @@ import * as sharp from 'sharp';
 
 @Injectable()
 export class LectureFilesValidationPipe implements PipeTransform {
+  private readonly isRequired: boolean;
+  constructor(options: { isRequired?: boolean } = {}) {
+    this.isRequired = options.isRequired ?? true;
+  }
   transform(files: Express.Multer.File[]) {
-    if (!files || files.length === 0) {
+    if (this.isRequired && (!files || files.length === 0)) {
       throw new BadRequestException('مطلوب ملف واحد على الأقل');
     }
 
+    if (!files || files.length === 0) {
+      return files;
+    }
     const allowedFileTypes = [
       /^video\/(mp4|mpeg|quicktime|x-msvideo|webm)$/,
       /^application\/pdf$/,
@@ -53,16 +60,16 @@ export class LectureUploadValidationPipe implements PipeTransform {
 
     let validatedFiles: Express.Multer.File[] = [];
     if (uploadedFiles.files && uploadedFiles.files.length > 0) {
-      validatedFiles = new LectureFilesValidationPipe().transform(
-        uploadedFiles.files,
-      );
+      validatedFiles = new LectureFilesValidationPipe({
+        isRequired: true,
+      }).transform(uploadedFiles.files);
     }
 
     let validatedThumbnail: Express.Multer.File | undefined = undefined;
     if (uploadedFiles.thumbnail && uploadedFiles.thumbnail.length > 0) {
       const imageValidationPipe = new ImageValidationPipe({
         isRequired: false,
-        maxSize: 5 * 1024 * 1024, // 5MB
+        maxSize: 5 * 1024 * 1024,
         allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
         typeErrorMessage:
           'يجب أن تكون الصورة المصغرة ملف صورة (JPEG أو PNG أو WebP)',

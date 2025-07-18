@@ -12,6 +12,8 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { StudentService } from './student.service';
+import { RechargeBalanceDto } from './dto/reacharge-balance.dto';
+import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
 
 @Controller('student')
 @Roles(Role.STUDENT)
@@ -33,5 +35,15 @@ export class StudentController {
     file: Express.Multer.File,
   ) {
     return this.studentService.updateProfile(req.user.id, body, file);
+  }
+
+  @Post('recharge-balance')
+  rechargeBalance(@Req() req, @Body() body: RechargeBalanceDto) {
+    return this.studentService.rechargeBalance(req.user.id, body.amount);
+  }
+
+  @Post('withdraw-request')
+  withdrawRequest(@Req() req, @Body() body: CreateWithdrawRequestDto) {
+    return this.studentService.createWithdrawRequest(req.user.id, body);
   }
 }

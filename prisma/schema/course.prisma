@@ -1,36 +1,32 @@
-enum CourseType {
-  حصة
-  شهرى
-  سنوى
-}
-
 model Course {
   id             Int             @id @default(autoincrement())
   courseName     String
-  description    String?
   courseType     CourseType
   thumbnail      String
-  price          Int
+  price          Decimal         @db.Decimal(10, 2)
   teacherId      Int
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
-  grade          Grade           @relation(fields: [gradeId], references: [id])
   gradeId        Int
-  Teacher        Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  CourseLecture  CourseLecture[]
-  Division       Division?       @relation(fields: [divisionId], references: [id])
+  description    String?
   divisionId     Int?
   courseFeatures String[]
+  expiresAt      DateTime?
+  Division       Division?       @relation(fields: [divisionId], references: [id])
+  grade          Grade           @relation(fields: [gradeId], references: [id])
+  Teacher        Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  CourseLecture  CourseLecture[]
+  studentCourse  StudentCourse[]
+  CartItem       CartItem[]
 }
 
 model CourseLecture {
-  id         Int @id @default(autoincrement())
+  id         Int     @id @default(autoincrement())
   courseId   Int
   lectureId  Int
   orderIndex Int
-
-  course  Course  @relation(fields: [courseId], references: [id])
-  lecture Lecture @relation(fields: [lectureId], references: [id])
+  course     Course  @relation(fields: [courseId], references: [id])
+  lecture    Lecture @relation(fields: [lectureId], references: [id])
 
   @@unique([courseId, lectureId])
 }
@@ -38,28 +34,48 @@ model CourseLecture {
 model Lecture {
   id             Int              @id @default(autoincrement())
   lectureName    String
-  LectureContent LectureContent[]
-  CourseLecture  CourseLecture[]
-  Grade          Grade?           @relation(fields: [gradeId], references: [id])
-  gradeId        Int?
-  Division       Division?        @relation(fields: [divisionId], references: [id])
   divisionId     Int?
+  gradeId        Int?
   createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
   teacherId      Int
+  updatedAt      DateTime         @updatedAt
+  CourseLecture  CourseLecture[]
+  Division       Division?        @relation(fields: [divisionId], references: [id])
+  Grade          Grade?           @relation(fields: [gradeId], references: [id])
   Teacher        Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  LectureContent LectureContent[]
+  Quiz           Quiz[]
 }
 
 model LectureContent {
   id          Int         @id @default(autoincrement())
   lectureId   Int
-  lecture     Lecture     @relation(fields: [lectureId], references: [id], onDelete: Cascade)
   contentType ContentType
   contentUrl  String
   duration    Int?
   createdAt   DateTime    @default(now())
-  contentName String
   orderIndex  Int
+  contentName String
+  lecture     Lecture     @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+}
+
+model StudentCourse {
+  id          Int       @id @default(autoincrement())
+  studentId   Int
+  courseId    Int
+  purchasedAt DateTime  @default(now())
+  expiresAt   DateTime?
+  isActive    Boolean   @default(true)
+  course      Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+}
+
+enum CourseType {
+  حصة
+  شهرى
+  سنوى
 }
 
 enum ContentType {

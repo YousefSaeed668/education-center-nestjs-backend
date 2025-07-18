@@ -1,57 +1,107 @@
-enum Gender {
-  ذكر
-  انثى
-}
-
-enum Role {
-  STUDENT
-  TEACHER
-  ADMIN
-  GUARDIAN
-}
-
 model User {
-  id             Int       @id @default(autoincrement())
-  userName       String    @unique
-  phoneNumber    String    @unique
-  password       String
-  displayName    String
-  profilePicture String?
-  gender         Gender
-  student        Student?
-  Teacher        Teacher?
-  admin          Admin?
-  role           Role      @default(STUDENT)
-  Guardian       Guardian?
-  refreshToken   String?
+  id                 Int               @id @default(autoincrement())
+  userName           String            @unique
+  phoneNumber        String            @unique
+  password           String
+  displayName        String
+  profilePicture     String?
+  gender             Gender
+  role               Role              @default(STUDENT)
+  refreshToken       String?
+  balance            Decimal           @default(0) @db.Decimal(10, 2)
+  admin              Admin?
+  Guardian           Guardian?
+  student            Student?
+  Teacher            Teacher?
+  withdrawRequests   WithdrawRequest[]
+  processedWithdraws WithdrawRequest[] @relation("ProcessedWithdraws")
+}
+
+model Address {
+  id              Int     @id @default(autoincrement())
+  recipientName   String
+  phoneNumber     String
+  streetAddress   String
+  postalCode      String?
+  additionalNotes String?
+  isDefault       Boolean @default(false)
+
+  government   Government @relation(fields: [governmentId], references: [id])
+  governmentId Int
+  city         City       @relation(fields: [cityId], references: [id])
+  cityId       Int
+
+  studentId Int
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  orders    Order[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Student {
-  id   Int  @id
-  user User @relation(fields: [id], references: [id], onDelete: Cascade)
-
-  government      Government     @relation(fields: [governmentId], references: [id])
-  governmentId    Int
-  city            City           @relation(fields: [cityId], references: [id])
-  cityId          Int
-  educationType   EducationType  @relation(fields: [educationTypeId], references: [id])
-  educationTypeId Int
-  secondLang      SecondLanguage @relation(fields: [secondLangId], references: [id])
-  secondLangId    Int
-  schoolType      SchoolType     @relation(fields: [schoolTypeId], references: [id])
-  schoolTypeId    Int
-
-  guardian           Guardian? @relation(fields: [guardianId], references: [id])
-  guardianId         Int?
+  id                 Int             @id
+  educationTypeId    Int
+  secondLangId       Int
+  schoolTypeId       Int
   parentPhoneNumber  String
-  isGuardianVerified Boolean   @default(false)
-  grade              Grade     @relation(fields: [gradeId], references: [id])
   gradeId            Int
-  division           Division  @relation(fields: [divisionId], references: [id])
-  divisionId         Int
   schoolName         String
+  cityId             Int
+  governmentId       Int
+  guardianId         Int?
+  isGuardianVerified Boolean         @default(false)
+  divisionId         Int
   Cart               Cart?
   Order              Order[]
+  city               City            @relation(fields: [cityId], references: [id])
+  division           Division        @relation(fields: [divisionId], references: [id])
+  educationType      EducationType   @relation(fields: [educationTypeId], references: [id])
+  government         Government      @relation(fields: [governmentId], references: [id])
+  grade              Grade           @relation(fields: [gradeId], references: [id])
+  guardian           Guardian?       @relation(fields: [guardianId], references: [id])
+  user               User            @relation(fields: [id], references: [id], onDelete: Cascade)
+  schoolType         SchoolType      @relation(fields: [schoolTypeId], references: [id])
+  secondLang         SecondLanguage  @relation(fields: [secondLangId], references: [id])
+  studentCourse      StudentCourse[]
+  address            Address[]
+  QuizAttempt        QuizAttempt[]
+}
+
+model WithdrawRequest {
+  id                Int              @id @default(autoincrement())
+  userId            Int
+  userType          WithdrawUserType
+  amount            Decimal          @db.Decimal(10, 2)
+  status            WithdrawStatus   @default(PENDING)
+  paymentMethod     PaymentMethod
+  phoneNumber       String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  accountHolderName String
+  notes             String?
+  adminNotes        String?
+  processedBy       Int?
+  processedAt       DateTime?
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  admin             User?            @relation("ProcessedWithdraws", fields: [processedBy], references: [id])
+}
+
+enum PaymentMethod {
+  INSTAPAY
+  EWALLET
+}
+
+enum WithdrawStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+}
+
+enum WithdrawUserType {
+  TEACHER
+  STUDENT
 }
 
 model Government {
@@ -59,14 +109,16 @@ model Government {
   name    String    @unique
   cities  City[]
   Student Student[]
+  Address Address[]
 }
 
 model City {
   id           Int        @id @default(autoincrement())
   name         String
-  government   Government @relation(fields: [governmentId], references: [id])
   governmentId Int
+  government   Government @relation(fields: [governmentId], references: [id])
   students     Student[]
+  Address      Address[]
 
   @@unique([name, governmentId])
 }
@@ -74,20 +126,21 @@ model City {
 model EducationType {
   id       Int       @id @default(autoincrement())
   name     String    @unique
-  students Student[]
   grade    Grade[]
+  students Student[]
   Teacher  Teacher[]
 }
 
 model Division {
   id       Int       @id @default(autoincrement())
   name     String
-  students Student[]
-  teachers Teacher[]
-  courses  Course[]
-  lectures Lecture[]
-  grade    Grade     @relation(fields: [gradeId], references: [id])
   gradeId  Int
+  book     Book[]
+  courses  Course[]
+  grade    Grade     @relation(fields: [gradeId], references: [id])
+  lectures Lecture[]
+  students Student[]
+  teachers Teacher[] @relation("DivisionToTeacher")
 
   @@unique([gradeId, name])
 }
@@ -107,41 +160,56 @@ model SchoolType {
 model Grade {
   id              Int           @id @default(autoincrement())
   name            String
-  educationType   EducationType @relation(fields: [educationTypeId], references: [id])
   educationTypeId Int
-  division        Division[]
-  students        Student[]
-  Teacher         Teacher[]
+  book            Book[]
   courses         Course[]
+  division        Division[]
+  educationType   EducationType @relation(fields: [educationTypeId], references: [id])
   lecture         Lecture[]
+  students        Student[]
+  Teacher         Teacher[]     @relation("GradeToTeacher")
 
   @@unique([educationTypeId, name])
 }
 
 model Teacher {
   id              Int           @id
-  user            User          @relation(fields: [id], references: [id], onDelete: Cascade)
   subject         String
   bio             String?
-  socialMedia     Json?         @default("{}")
-  educationType   EducationType @relation(fields: [educationTypeId], references: [id])
-  educationTypeId Int
-  grade           Grade[]
-  division        Division[]
   isActive        Boolean       @default(false)
+  educationTypeId Int
+  socialMedia     Json?         @default("{}")
+  book            Book[]
   courses         Course[]
   Lecture         Lecture[]
+  educationType   EducationType @relation(fields: [educationTypeId], references: [id])
+  user            User          @relation(fields: [id], references: [id], onDelete: Cascade)
+  division        Division[]    @relation("DivisionToTeacher")
+  grade           Grade[]       @relation("GradeToTeacher")
+  Quiz            Quiz[]
 }
 
 model Guardian {
   id          Int       @id
-  user        User      @relation(fields: [id], references: [id], onDelete: Cascade)
   phoneNumber String    @unique
+  user        User      @relation(fields: [id], references: [id], onDelete: Cascade)
   students    Student[]
 }
 
 model Admin {
   id                  Int     @id
-  user                User    @relation(fields: [id], references: [id], onDelete: Cascade)
   teacherRegistration Boolean @default(true)
+  user                User    @relation(fields: [id], references: [id], onDelete: Cascade)
+}
+
+enum Gender {
+  ذكر
+  انثى
+}
+
+enum Role {
+  STUDENT
+  TEACHER
+  ADMIN
+  GUARDIAN
 }

@@ -1,9 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { S3Service } from 'src/s3/s3.service';
 import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 import { UserService } from 'src/user/user.service';
 import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
+import { WithdrawUserType } from '@prisma/client';
+import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
 
 @Injectable()
 export class TeacherService {
@@ -75,5 +81,50 @@ export class TeacherService {
 
       throw error;
     }
+  }
+  createWithdrawRequest(teacherId: number, body: CreateWithdrawRequestDto) {
+    return this.prisma.$transaction(async (prisma) => {
+      const teacher = await prisma.user.findUnique({
+        where: { id: teacherId },
+        select: {
+          balance: true,
+        },
+      });
+      if (!teacher) {
+        throw new NotFoundException('المعلم غير موجود');
+      }
+      if (teacher.balance.lessThan(body.amount)) {
+        throw new BadRequestException(
+          'رصيد المعلم غير كافٍ لإجراء عملية السحب',
+        );
+      }
+      if (body.amount < 10) {
+        throw new BadRequestException('اقل مبلغ للسحب هو 10 جنيهات');
+      }
+      const withdrawRequest = await prisma.withdrawRequest.create({
+        data: {
+          amount: body.amount,
+          userId: teacherId,
+          accountHolderName: body.accountHolderName,
+          notes: body.notes,
+          paymentMethod: body.paymentMethod,
+          userType: WithdrawUserType.TEACHER,
+          phoneNumber: body.phoneNumber,
+        },
+      });
+      await prisma.user.update({
+        where: { id: teacherId },
+        data: {
+          balance: {
+            decrement: body.amount,
+          },
+        },
+      });
+      return {
+        message: 'تم إنشاء طلب السحب بنجاح',
+        status: 200,
+        data: withdrawRequest,
+      };
+    });
   }
 }

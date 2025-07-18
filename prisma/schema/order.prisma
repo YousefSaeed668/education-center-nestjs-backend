@@ -1,7 +1,6 @@
 enum ProductType {
   COURSE
   BOOK
-  EBOOK
 }
 
 enum Status {
@@ -24,20 +23,26 @@ model CartItem {
   productId   Int
   productType ProductType
   quantity    Int         @default(1)
+  courseId    Int?
+  bookId      Int?
+  course      Course?     @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  book        Book?       @relation(fields: [bookId], references: [id], onDelete: Cascade)
 
   @@unique([cartId, productId, productType])
 }
 
 model Order {
-  id              Int         @id @default(autoincrement())
-  studentId       Int
-  student         Student     @relation(fields: [studentId], references: [id])
-  totalAmount     Decimal     @db.Decimal(10, 2)
-  status          Status      @default(PENDING)
-  paymobPaymentId String?     @unique
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  orderItems      OrderItem[]
+  id                Int         @id @default(autoincrement())
+  studentId         Int
+  student           Student     @relation(fields: [studentId], references: [id])
+  totalAmount       Decimal     @db.Decimal(10, 2)
+  status            Status      @default(PENDING)
+  transactionId     String?     @unique
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  orderItems        OrderItem[]
+  shippingAddressId Int?
+  shippingAddress   Address?    @relation(fields: [shippingAddressId], references: [id])
 }
 
 model OrderItem {
@@ -46,7 +51,7 @@ model OrderItem {
   order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId   Int
   productType ProductType
-  price       Int
+  price       Decimal     @db.Decimal(10, 2)
   quantity    Int         @default(1)
 
   @@unique([orderId, productId, productType])

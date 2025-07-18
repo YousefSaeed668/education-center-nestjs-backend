@@ -67,12 +67,7 @@ export class LectureController {
     @Param('lectureId', ParseIntPipe) lectureId: number,
     @Body()
     updateLectureDto: UpdateLectureDto,
-    @UploadedFiles(
-      new ParseFilePipe({
-        fileIsRequired: false,
-      }),
-      LectureFilesValidationPipe,
-    )
+    @UploadedFiles(new LectureFilesValidationPipe({ isRequired: false }))
     files: Express.Multer.File[],
   ) {
     return this.lectureService.updateLecture(
@@ -85,10 +80,7 @@ export class LectureController {
 
   @Roles(Role.TEACHER)
   @Delete(':lectureId')
-  deleteLecture(
-    @Req() req,
-    @Param('lectureId', ParseIntPipe) lectureId: number,
-  ) {
+  deleteLecture(@Req() req, @Param('lectureId') lectureId: number) {
     return this.lectureService.deleteLecture(req.user.id, lectureId);
   }
 }

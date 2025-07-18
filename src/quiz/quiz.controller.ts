@@ -1,0 +1,58 @@
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseIntPipe,
+  Post,
+  Put,
+  Req,
+} from '@nestjs/common';
+import { Role } from '@prisma/client';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { CreateQuizDto } from './dto/create-quiz.dto';
+import { UpdateQuizDto } from './dto/update-quiz.dto';
+import { QuizService } from './quiz.service';
+
+@Controller('quiz')
+export class QuizController {
+  constructor(private readonly quizService: QuizService) {}
+
+  @Roles(Role.TEACHER)
+  @Post('create')
+  createQuiz(@Req() req, @Body() createQuizDto: CreateQuizDto) {
+    return this.quizService.createQuiz(req.user.id, createQuizDto);
+  }
+
+  @Roles(Role.TEACHER)
+  @Put(':quizId')
+  updateQuiz(
+    @Req() req,
+    @Param('quizId', ParseIntPipe) quizId: number,
+    @Body() updateQuizDto: UpdateQuizDto,
+  ) {
+    return this.quizService.updateQuiz(req.user.id, quizId, updateQuizDto);
+  }
+
+  @Roles(Role.TEACHER)
+  @Delete(':quizId')
+  deleteQuiz(@Req() req, @Param('quizId', ParseIntPipe) quizId: number) {
+    return this.quizService.deleteQuiz(req.user.id, quizId);
+  }
+
+  @Roles(Role.TEACHER)
+  @Get(':quizId')
+  getQuizById(@Req() req, @Param('quizId', ParseIntPipe) quizId: number) {
+    return this.quizService.getQuizById(req.user.id, quizId);
+  }
+
+  @Roles(Role.TEACHER)
+  @Get('lecture/:lectureId')
+  getQuizzesByLecture(
+    @Req() req,
+    @Param('lectureId', ParseIntPipe) lectureId: number,
+  ) {
+    return this.quizService.getQuizzesByLecture(req.user.id, lectureId);
+  }
+}

@@ -280,7 +280,7 @@ export class LectureService {
       const existingLecture = await prisma.lecture.findUnique({
         where: {
           id: lectureId,
-          teacherId: teacherId,
+          teacherId,
         },
         include: {
           LectureContent: true,

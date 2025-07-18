@@ -6,5 +6,6 @@ import { PrismaService } from 'src/prisma.service';
 @Module({
   controllers: [CartController],
   providers: [CartService, PrismaService],
+  exports: [CartService],
 })
 export class CartModule {}
