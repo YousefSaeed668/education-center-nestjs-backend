@@ -46,13 +46,48 @@ model Order {
 }
 
 model OrderItem {
-  id          Int         @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   orderId     Int
-  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  order       Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId   Int
   productType ProductType
-  price       Decimal     @db.Decimal(10, 2)
-  quantity    Int         @default(1)
+  price       Decimal       @db.Decimal(10, 2)
+  quantity    Int           @default(1)
+  Transaction Transaction[]
 
   @@unique([orderId, productId, productType])
+}
+
+model Transaction {
+  id Int @id @default(autoincrement())
+
+  orderItemId  Int?
+  orderItem    OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  teacherId    Int?
+  teacher      Teacher?   @relation(fields: [teacherId], references: [id])
+  teacherShare Decimal?   @db.Decimal(10, 2)
+
+  studentId Int?
+  student   Student? @relation(fields: [studentId], references: [id])
+
+  totalAmount     Decimal         @db.Decimal(10, 2)
+  adminShare      Decimal         @db.Decimal(10, 2)
+  transactionDate DateTime        @default(now())
+  transactionType TransactionType
+  paymentSource   PaymentSource?  @default(CREDIT_CARD)
+  description     String?
+
+  updatedAt DateTime @updatedAt
+}
+
+enum PaymentSource {
+  CREDIT_CARD
+  BALANCE
+}
+
+enum TransactionType {
+  ORDER
+  BALANCE_UP
+  TEACHER_WITHDRAWAL
+  STUDENT_WITHDRAWAL
 }

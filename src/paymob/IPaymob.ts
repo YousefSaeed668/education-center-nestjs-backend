@@ -1,4 +1,4 @@
-import { ProductType } from '@prisma/client';
+import { ProductType, PaymentSource } from '@prisma/client';
 
 export enum PaymentPurpose {
   CART_ORDER = 'CART_ORDER',
@@ -14,6 +14,7 @@ export interface PaymentContext {
     productType?: ProductType;
     cartId?: number;
     [key: string]: any;
+    paymentSource: PaymentSource;
   };
 }
 

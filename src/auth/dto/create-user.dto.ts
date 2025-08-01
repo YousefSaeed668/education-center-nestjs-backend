@@ -29,7 +29,9 @@ export class CreateUserDto {
   })
   userName: string;
 
-  @IsPhoneNumber('EG')
+  @IsPhoneNumber('EG', {
+    message: 'رقم الهاتف يجب أن يكون رقم هاتف مصري صالح',
+  })
   phoneNumber: string;
 
   @IsStrongPassword({
@@ -47,9 +49,9 @@ export class CreateUserDto {
 }
 
 export class CreateTeacherDto extends CreateUserDto {
-  @IsString()
-  @IsNotEmpty()
-  subject: string;
+  @IsInt({ message: 'معرف المادة يجب أن يكون رقم صحيح' })
+  @IsNotEmpty({ message: 'معرف المادة مطلوب' })
+  subjectId: number;
 
   @IsArray({ message: 'الشعبة يجب أن تكون مصفوفة من المعرفات' })
   @ArrayNotEmpty({ message: 'يجب اختيار شعبة واحدة على الأقل' })

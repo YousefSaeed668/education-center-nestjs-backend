@@ -21,7 +21,7 @@ export class OrderController {
   createCartOrder(@Req() req, @Body() body: CreateOrderDto) {
     return this.orderService.createCartOrder(
       req.user.id,
-      body.paymentType,
+      body.paymentSource,
       body.addressId,
       body.newAddress,
     );
@@ -38,7 +38,7 @@ export class OrderController {
       req.user.id,
       productId,
       productType,
-      body.paymentType,
+      body.paymentSource,
       body.addressId,
       body.newAddress,
     );

@@ -1,8 +1,14 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as crypto from 'crypto';
 import { IPaymob, PaymentContext, PaymentPurpose } from './IPaymob';
+import { PrismaService } from 'src/prisma.service';
+import { AdminService } from 'src/admin/admin.service';
 
 @Injectable()
 export class PaymobService implements IPaymob {
@@ -12,6 +18,8 @@ export class PaymobService implements IPaymob {
   constructor(
     private readonly configService: ConfigService,
     private readonly eventEmitter: EventEmitter2,
+    private readonly prisma: PrismaService,
+    private readonly adminService: AdminService,
   ) {
     this.frameId = this.configService.get<string>('PAYMOB_FRAME_ID')!;
     this.integrationId = this.configService.get<string>(
@@ -252,18 +260,33 @@ export class PaymobService implements IPaymob {
 
     return { status: 'success' };
   }
-  handleSuccessfulPayment(
+  async handleSuccessfulPayment(
     orderId: number,
     transactionId: number,
     amountCents: number,
-    paymentContext?: PaymentContext,
+    paymentContext: PaymentContext,
   ) {
+    if (paymentContext.metadata?.paymentSource === 'CREDIT_CARD') {
+      const platformSetting = await this.prisma.platformSetting.findFirst({
+        select: {
+          platformPercentage: true,
+        },
+      });
+      if (!platformSetting) {
+        throw new NotFoundException('الاعدادات غير موجودة');
+      }
+      const adminShare =
+        amountCents * platformSetting.platformPercentage.toNumber();
+
+      await this.adminService.updateAdminBalance(adminShare / 100, 'ADD');
+    }
     switch (paymentContext?.purpose) {
       case PaymentPurpose.CART_ORDER:
         this.eventEmitter.emit('payment.cart-order.success', {
           orderId,
           transactionId,
           amountCents,
+          paymentSource: paymentContext?.metadata?.paymentSource,
           studentId: paymentContext.studentId,
           metadata: paymentContext.metadata,
         });
@@ -273,6 +296,7 @@ export class PaymobService implements IPaymob {
           orderId,
           transactionId,
           amountCents,
+          paymentSource: paymentContext?.metadata?.paymentSource,
           studentId: paymentContext.studentId,
           metadata: paymentContext.metadata,
         });

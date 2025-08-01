@@ -1,3 +1,4 @@
+import { PaymentSource } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -11,11 +12,6 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-
-export enum PaymentType {
-  BALANCE = 'BALANCE',
-  CREDIT_CARD = 'CREDIT_CARD',
-}
 export class AddressDto {
   @IsString({ message: 'اسم المستلم يجب أن يكون نص' })
   @IsNotEmpty({ message: 'اسم المستلم مطلوب' })
@@ -78,8 +74,8 @@ export class CreateOrderDto {
   newAddress?: AddressDto;
 
   @IsNotEmpty({ message: 'نوع الدفع مطلوب' })
-  @IsEnum(PaymentType, {
+  @IsEnum(PaymentSource, {
     message: 'نوع الدفع يجب أن يكون BALANCE أو CREDIT_CARD',
   })
-  paymentType: PaymentType;
+  paymentSource: PaymentSource;
 }

@@ -7,7 +7,7 @@ import { HelperFunctionsService } from 'src/common/services/helperfunctions.serv
 import { PaymobService } from 'src/paymob/paymob.service';
 import { PaymentPurpose } from 'src/paymob/IPaymob';
 import { OnEvent } from '@nestjs/event-emitter';
-import { WithdrawUserType } from '@prisma/client';
+import { PaymentSource, WithdrawUserType } from '@prisma/client';
 import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
 
 @Injectable()
@@ -131,6 +131,7 @@ export class StudentService {
         studentId: student.id,
         metadata: {
           amount: amount,
+          paymentSource: PaymentSource.CREDIT_CARD,
         },
       },
     );
@@ -153,13 +154,25 @@ export class StudentService {
     };
   }) {
     try {
-      await this.prisma.user.update({
-        where: { id: payload.studentId },
-        data: {
-          balance: {
-            increment: payload.metadata.amount,
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: payload.studentId },
+          data: {
+            balance: {
+              increment: payload.metadata.amount,
+            },
           },
-        },
+        });
+
+        await tx.transaction.create({
+          data: {
+            studentId: payload.studentId,
+            totalAmount: payload.metadata.amount,
+            adminShare: 0,
+            transactionType: 'BALANCE_UP',
+            description: `شحن رصيد بقيمة ${payload.metadata.amount} جنيه`,
+          },
+        });
       });
 
       console.log(

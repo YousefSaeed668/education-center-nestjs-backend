@@ -1,0 +1,32 @@
+model Comment {
+  id              Int       @id @default(autoincrement())
+  parentCommentId Int?
+  commentImageUrl String?
+  text            String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  student         Student?  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId       Int?
+  teacherId       Int?
+  teacher         Teacher?  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  courseId        Int
+  course          Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  parentComment   Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[] @relation("CommentReplies")
+}
+
+model Review {
+  id        Int      @id @default(autoincrement())
+  text      String?
+  rating    Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studentId Int
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  courseId Int
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, courseId])
+}

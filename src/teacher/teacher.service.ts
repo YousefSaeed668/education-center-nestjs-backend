@@ -8,7 +8,7 @@ import { S3Service } from 'src/s3/s3.service';
 import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 import { UserService } from 'src/user/user.service';
 import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
-import { WithdrawUserType } from '@prisma/client';
+import { TransactionType, WithdrawUserType } from '@prisma/client';
 import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
 
 @Injectable()
@@ -62,7 +62,7 @@ export class TeacherService {
             }),
           },
           include: {
-            Teacher: true,
+            teacher: true,
           },
         });
       });
@@ -126,5 +126,41 @@ export class TeacherService {
         data: withdrawRequest,
       };
     });
+  }
+
+  async getTeacherEarnings(
+    teacherId: number,
+    startDate?: Date,
+    endDate?: Date,
+  ) {
+    const startDateObj = startDate ? new Date(startDate) : undefined;
+    const endDateObj = endDate ? new Date(endDate) : undefined;
+    const whereClause = {
+      teacherId,
+      transactionType: TransactionType.ORDER,
+      ...(startDate &&
+        endDate && {
+          transactionDate: {
+            gte: startDateObj,
+            lte: endDateObj,
+          },
+        }),
+    };
+
+    const earnings = await this.prisma.transaction.aggregate({
+      where: whereClause,
+      _sum: {
+        teacherShare: true,
+      },
+    });
+    const currentBalance = await this.prisma.user.findUnique({
+      where: { id: teacherId },
+      select: { balance: true },
+    });
+
+    return {
+      totalEarnings: earnings._sum.teacherShare?.toNumber() || 0,
+      currentBalance: currentBalance?.balance.toNumber() || 0,
+    };
   }
 }

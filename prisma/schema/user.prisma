@@ -10,9 +10,11 @@ model User {
   refreshToken       String?
   balance            Decimal           @default(0) @db.Decimal(10, 2)
   admin              Admin?
-  Guardian           Guardian?
+  guardian           Guardian?
   student            Student?
-  Teacher            Teacher?
+  teacher            Teacher?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
   withdrawRequests   WithdrawRequest[]
   processedWithdraws WithdrawRequest[] @relation("ProcessedWithdraws")
 }
@@ -36,7 +38,7 @@ model Address {
   orders    Order[]
 
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
 }
 
 model Student {
@@ -66,6 +68,9 @@ model Student {
   studentCourse      StudentCourse[]
   address            Address[]
   QuizAttempt        QuizAttempt[]
+  transactions       Transaction[]
+  Comment            Comment[]
+  Review             Review[]
 }
 
 model WithdrawRequest {
@@ -128,7 +133,7 @@ model EducationType {
   name     String    @unique
   grade    Grade[]
   students Student[]
-  Teacher  Teacher[]
+  teacher  Teacher[]
 }
 
 model Division {
@@ -167,14 +172,13 @@ model Grade {
   educationType   EducationType @relation(fields: [educationTypeId], references: [id])
   lecture         Lecture[]
   students        Student[]
-  Teacher         Teacher[]     @relation("GradeToTeacher")
+  teacher         Teacher[]     @relation("GradeToTeacher")
 
   @@unique([educationTypeId, name])
 }
 
 model Teacher {
   id              Int           @id
-  subject         String
   bio             String?
   isActive        Boolean       @default(false)
   educationTypeId Int
@@ -187,6 +191,18 @@ model Teacher {
   division        Division[]    @relation("DivisionToTeacher")
   grade           Grade[]       @relation("GradeToTeacher")
   Quiz            Quiz[]
+  transactions    Transaction[]
+  subject         Subject?      @relation(fields: [subjectId], references: [id])
+  subjectId       Int?
+  Comment         Comment[]
+}
+
+model Subject {
+  id      Int       @id @default(autoincrement())
+  name    String
+  teacher Teacher[]
+
+  @@unique([name])
 }
 
 model Guardian {
@@ -197,9 +213,16 @@ model Guardian {
 }
 
 model Admin {
-  id                  Int     @id
-  teacherRegistration Boolean @default(true)
-  user                User    @relation(fields: [id], references: [id], onDelete: Cascade)
+  id   Int  @id
+  user User @relation(fields: [id], references: [id], onDelete: Cascade)
+}
+
+model PlatformSetting {
+  id                    Int     @id @default(autoincrement())
+  key                   String  @unique
+  teacherRegistration   Boolean @default(true)
+  platformPercentage    Decimal @default(0.1) @db.Decimal(3, 2)
+  minimumWithdrawAmount Decimal @default(10) @db.Decimal(10, 2)
 }
 
 enum Gender {

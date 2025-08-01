@@ -1,10 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { CartService } from 'src/cart/cart.service';
-import { AddressDto, PaymentType } from 'src/order/dto/address-dto';
+import { AddressDto } from 'src/order/dto/address-dto';
 import { PrismaService } from 'src/prisma.service';
 import { StudentService } from 'src/student/student.service';
 import { ChooseStudentsDto } from './dto/choose-students.dto';
 import { OrderService } from 'src/order/order.service';
+import { PaymentSource } from '@prisma/client';
 
 @Injectable()
 export class GuardianService {
@@ -72,7 +73,7 @@ export class GuardianService {
 
     return this.orderService.createCartOrder(
       studentId,
-      PaymentType.CREDIT_CARD,
+      PaymentSource.CREDIT_CARD,
       addressId,
       newAddress,
     );

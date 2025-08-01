@@ -88,7 +88,7 @@ export class AuthService {
       userName,
       gender,
       phoneNumber,
-      subject,
+      subjectId,
       educationTypeId,
       divisionIds,
       gradeIds,
@@ -106,9 +106,9 @@ export class AuthService {
         phoneNumber,
         password: hashedPassword,
         role: 'TEACHER',
-        Teacher: {
+        teacher: {
           create: {
-            subject,
+            subjectId,
             educationTypeId,
             division: {
               connect: divisionIds.map((id) => ({ id })),
@@ -150,7 +150,7 @@ export class AuthService {
         phoneNumber,
         password: hashedPassword,
         role: 'GUARDIAN',
-        Guardian: {
+        guardian: {
           create: {
             phoneNumber,
           },

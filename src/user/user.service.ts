@@ -8,6 +8,7 @@ import { PrismaService } from 'src/prisma.service';
 import { S3Service } from 'src/s3/s3.service';
 import { WithdrawUserType } from '@prisma/client';
 import { CreateWithdrawRequestDto } from './dto/create-withdraw-request.dto';
+import { GetAllUsersDto } from './dto/get-all-users.dto';
 
 @Injectable()
 export class UserService {
@@ -16,6 +17,8 @@ export class UserService {
     private readonly s3Service: S3Service,
     private readonly imageService: ImageService,
   ) {}
+  async getAllUsers(getAllUsersDto: GetAllUsersDto) {}
+
   async findUserById(id: number) {
     return await this.prisma.user.findUnique({
       where: {
@@ -92,7 +95,7 @@ export class UserService {
           `رصيد ${userTypeText} غير كافٍ لإجراء عملية السحب`,
         );
       }
-
+      // TODO : Make The minimum amount dynamic
       if (body.amount < 10) {
         throw new BadRequestException('اقل مبلغ للسحب هو 10 جنيهات');
       }

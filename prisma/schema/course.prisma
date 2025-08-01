@@ -14,10 +14,12 @@ model Course {
   expiresAt      DateTime?
   Division       Division?       @relation(fields: [divisionId], references: [id])
   grade          Grade           @relation(fields: [gradeId], references: [id])
-  Teacher        Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacher        Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   CourseLecture  CourseLecture[]
   studentCourse  StudentCourse[]
   CartItem       CartItem[]
+  Comment        Comment[]
+  Review         Review[]
 }
 
 model CourseLecture {
@@ -42,7 +44,7 @@ model Lecture {
   CourseLecture  CourseLecture[]
   Division       Division?        @relation(fields: [divisionId], references: [id])
   Grade          Grade?           @relation(fields: [gradeId], references: [id])
-  Teacher        Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacher        Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   LectureContent LectureContent[]
   Quiz           Quiz[]
 }

@@ -10,9 +10,9 @@ import {
 } from '@nestjs/common';
 import { GuardianService } from './guardian.service';
 import { Roles } from 'src/auth/decorators/roles.decorator';
-import { Role } from '@prisma/client';
+import { PaymentSource, Role } from '@prisma/client';
 import { ChooseStudentsDto } from './dto/choose-students.dto';
-import { CreateOrderDto, PaymentType } from 'src/order/dto/address-dto';
+import { CreateOrderDto } from 'src/order/dto/address-dto';
 import { RechargeBalanceDto } from 'src/student/dto/reacharge-balance.dto';
 
 @Controller('guardian')
@@ -43,7 +43,7 @@ export class GuardianController {
     @Param('studentId', ParseIntPipe) studentId: number,
     @Body() body: CreateOrderDto,
   ) {
-    if (body.paymentType !== PaymentType.CREDIT_CARD) {
+    if (body.paymentSource !== PaymentSource.CREDIT_CARD) {
       throw new BadRequestException(
         'الأوصياء يمكنهم الدفع بالبطاقة الائتمانية فقط',
       );

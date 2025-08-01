@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Get,
   Post,
+  Query,
   Req,
   UploadedFile,
   UseInterceptors,
@@ -13,6 +15,7 @@ import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 import { TeacherService } from './teacher.service';
 import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
+import { GetFinancialStatisticsDto } from 'src/admin/dto/get-financial-statistics.dto';
 
 @Controller('teacher')
 @Roles(Role.TEACHER)
@@ -38,5 +41,13 @@ export class TeacherController {
   @Post('withdraw-request')
   withdrawRequest(@Req() req, @Body() body: CreateWithdrawRequestDto) {
     return this.teacherService.createWithdrawRequest(req.user.id, body);
+  }
+  @Get('get-earning')
+  getEarning(@Req() req, @Query() query: GetFinancialStatisticsDto) {
+    return this.teacherService.getTeacherEarnings(
+      req.user.id,
+      query.startDate,
+      query.endDate,
+    );
   }
 }

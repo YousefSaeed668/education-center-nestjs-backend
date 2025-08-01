@@ -19,6 +19,8 @@ import { BookModule } from './book/book.module';
 import { AdminModule } from './admin/admin.module';
 import { GuardianModule } from './guardian/guardian.module';
 import { QuizModule } from './quiz/quiz.module';
+import { CommentModule } from './comment/comment.module';
+import { ReviewModule } from './review/review.module';
 
 @Module({
   imports: [
@@ -39,6 +41,8 @@ import { QuizModule } from './quiz/quiz.module';
     AdminModule,
     GuardianModule,
     QuizModule,
+    CommentModule,
+    ReviewModule,
   ],
   controllers: [AppController],
   providers: [AppService],

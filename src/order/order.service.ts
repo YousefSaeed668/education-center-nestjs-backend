@@ -4,12 +4,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
-import { ProductType } from '@prisma/client';
+import { PaymentSource, ProductType } from '@prisma/client';
 import { CartService } from 'src/cart/cart.service';
 import { PaymentPurpose } from 'src/paymob/IPaymob';
 import { PaymobService } from 'src/paymob/paymob.service';
 import { PrismaService } from 'src/prisma.service';
-import { AddressDto, PaymentType } from './dto/address-dto';
+import { AddressDto } from './dto/address-dto';
 
 @Injectable()
 export class OrderService {
@@ -93,7 +93,7 @@ export class OrderService {
 
   async createCartOrder(
     studentId: number,
-    paymentType: PaymentType,
+    paymentSource: PaymentSource,
     addressId?: number,
     newAddress?: AddressDto,
   ) {
@@ -127,7 +127,7 @@ export class OrderService {
       newAddress,
     );
 
-    if (paymentType === PaymentType.BALANCE) {
+    if (paymentSource === PaymentSource.BALANCE) {
       const totalPrice = cart.totalPrice;
       const userBalance = student.user.balance.toNumber();
 
@@ -163,6 +163,7 @@ export class OrderService {
         metadata: {
           cartId: cart.id,
           addressId: finalAddressId,
+          paymentSource: paymentSource,
         },
       },
     );
@@ -192,7 +193,7 @@ export class OrderService {
           },
         });
 
-        const totalPrice = cart.totalPrice.toNumber();
+        const totalPrice = cart.totalPrice;
         const userBalance = student?.user.balance.toNumber() || 0;
 
         if (userBalance < totalPrice) {
@@ -212,11 +213,12 @@ export class OrderService {
       const payload = {
         orderId: 0,
         transactionId: Date.now(),
-        amountCents: cart.totalPrice.toNumber() * 100,
+        amountCents: cart.totalPrice * 100,
         studentId: studentId,
         metadata: {
           cartId: cart.id,
           addressId: addressId,
+          paymentSource: PaymentSource.BALANCE,
         },
       };
 
@@ -236,6 +238,7 @@ export class OrderService {
     metadata: {
       cartId: number;
       addressId?: number;
+      paymentSource: PaymentSource;
     };
   }) {
     console.log(
@@ -276,7 +279,7 @@ export class OrderService {
               ? cartItem.course?.price.toNumber() || 0
               : cartItem.book?.price.toNumber() || 0;
 
-          await tx.orderItem.create({
+          const orderItem = await tx.orderItem.create({
             data: {
               orderId: order.id,
               productId: cartItem.productId,
@@ -285,8 +288,21 @@ export class OrderService {
               quantity: cartItem.quantity,
             },
           });
-          // TODO : The Commission Percentage Should be Dynamic
-          const teacherCommission = itemPrice * cartItem.quantity * 0.9;
+
+          const platformSetting = await tx.platformSetting.findFirst({
+            select: {
+              platformPercentage: true,
+            },
+          });
+          if (!platformSetting) {
+            throw new NotFoundException('إعدادات المنصة غير موجودة');
+          }
+          const totalItemAmount = itemPrice * cartItem.quantity;
+          const teacherShare =
+            totalItemAmount *
+            (1 - platformSetting?.platformPercentage.toNumber());
+          const adminShare =
+            totalItemAmount * platformSetting?.platformPercentage.toNumber();
 
           let teacherId: number;
           if (cartItem.productType === 'COURSE') {
@@ -300,8 +316,21 @@ export class OrderService {
               where: { id: teacherId },
               data: {
                 balance: {
-                  increment: teacherCommission,
+                  increment: teacherShare,
                 },
+              },
+            });
+
+            await tx.transaction.create({
+              data: {
+                orderItemId: orderItem.id,
+                teacherId: teacherId,
+                teacherShare: teacherShare,
+                totalAmount: totalItemAmount,
+                adminShare: adminShare,
+                transactionType: 'ORDER',
+                description: `بيع ${cartItem.productType === 'COURSE' ? 'كورس' : 'كتاب'}: ${cartItem.productType === 'COURSE' ? cartItem.course?.courseName : cartItem.book?.bookName}`,
+                paymentSource: payload.metadata.paymentSource,
               },
             });
           }
@@ -348,7 +377,7 @@ export class OrderService {
     studentId: number,
     productId: number,
     productType: ProductType,
-    paymentType: PaymentType,
+    paymentSource: PaymentSource,
     addressId?: number,
     newAddress?: AddressDto,
   ) {
@@ -423,7 +452,7 @@ export class OrderService {
       );
     }
 
-    if (paymentType === PaymentType.BALANCE) {
+    if (paymentSource === PaymentSource.BALANCE) {
       const userBalance = student.user.balance.toNumber();
 
       if (userBalance < price) {
@@ -447,14 +476,12 @@ export class OrderService {
         },
       };
     }
-
     const paymentItem = {
       name: productType === 'BOOK' ? product.bookName : product.courseName,
       amount_cents: price * 100,
       description: `${productType} - ${productType === 'BOOK' ? product.bookName : product.courseName}`,
       quantity: 1,
     };
-
     const user = {
       phone: student.user.phoneNumber,
       firstName: student.user.displayName,
@@ -472,6 +499,7 @@ export class OrderService {
           productId: productId,
           productType: productType,
           addressId: finalAddressId,
+          paymentSource: paymentSource,
         },
       },
     );
@@ -528,6 +556,7 @@ export class OrderService {
           productId: productId,
           productType: productType,
           addressId: addressId,
+          paymentSource: PaymentSource.BALANCE,
         },
       };
 
@@ -548,6 +577,7 @@ export class OrderService {
       productId: number;
       productType: ProductType;
       addressId?: number;
+      paymentSource: PaymentSource;
     };
   }) {
     console.log(
@@ -568,11 +598,17 @@ export class OrderService {
 
         let productPrice: number = 0;
         let teacherId: number = 0;
+        let productName: string = '';
 
         if (payload.metadata.productType === 'COURSE') {
           const course = await tx.course.findUnique({
             where: { id: payload.metadata.productId },
-            select: { price: true, expiresAt: true, teacherId: true },
+            select: {
+              price: true,
+              expiresAt: true,
+              teacherId: true,
+              courseName: true,
+            },
           });
 
           if (!course) {
@@ -581,6 +617,7 @@ export class OrderService {
 
           productPrice = course.price.toNumber();
           teacherId = course.teacherId;
+          productName = course.courseName;
 
           await tx.studentCourse.create({
             data: {
@@ -593,7 +630,7 @@ export class OrderService {
         } else if (payload.metadata.productType === 'BOOK') {
           const book = await tx.book.findUnique({
             where: { id: payload.metadata.productId },
-            select: { price: true, teacherId: true },
+            select: { price: true, teacherId: true, bookName: true },
           });
 
           if (!book) {
@@ -602,27 +639,11 @@ export class OrderService {
 
           productPrice = book.price.toNumber();
           teacherId = book.teacherId;
+          productName = book.bookName;
         }
 
-        // TODO : The Commission Percentage Should be Dynamic
-        const teacherCommission = productPrice * 0.9;
-
-        if (teacherId) {
-          await tx.user.update({
-            where: { id: teacherId },
-            data: {
-              balance: {
-                increment: teacherCommission,
-              },
-            },
-          });
-
-          console.log(
-            `Added ${teacherCommission} EGP commission to teacher ${teacherId} for direct purchase of ${payload.metadata.productType} ${payload.metadata.productId}`,
-          );
-        }
-
-        await tx.orderItem.create({
+        // Create order item
+        const orderItem = await tx.orderItem.create({
           data: {
             orderId: order.id,
             productId: payload.metadata.productId,
@@ -631,6 +652,50 @@ export class OrderService {
             quantity: 1,
           },
         });
+
+        const platformSetting = await tx.platformSetting.findFirst({
+          select: {
+            platformPercentage: true,
+          },
+        });
+
+        if (!platformSetting) {
+          throw new NotFoundException('إعدادات المنصة غير موجودة');
+        }
+        const teacherShare =
+          productPrice * (1 - platformSetting.platformPercentage.toNumber());
+        const adminShare =
+          productPrice * platformSetting.platformPercentage.toNumber();
+
+        if (teacherId) {
+          // Update teacher balance
+          await tx.user.update({
+            where: { id: teacherId },
+            data: {
+              balance: {
+                increment: teacherShare,
+              },
+            },
+          });
+
+          // Create transaction record
+          await tx.transaction.create({
+            data: {
+              orderItemId: orderItem.id,
+              teacherId: teacherId,
+              teacherShare: teacherShare,
+              totalAmount: productPrice,
+              adminShare: adminShare,
+              transactionType: 'ORDER',
+              description: `بيع ${payload.metadata.productType === 'COURSE' ? 'كورس' : 'كتاب'}: ${productName}`,
+              paymentSource: payload.metadata.paymentSource,
+            },
+          });
+
+          console.log(
+            `Added ${teacherShare} EGP commission to teacher ${teacherId} for direct purchase of ${payload.metadata.productType} ${payload.metadata.productId}`,
+          );
+        }
 
         console.log(`Direct order ${order.id} created successfully`);
       });
