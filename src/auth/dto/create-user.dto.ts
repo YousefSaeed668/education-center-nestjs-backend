@@ -1,8 +1,9 @@
+import { Gender } from '@prisma/client';
+import { Type } from 'class-transformer';
 import {
   ArrayMinSize,
   ArrayNotEmpty,
   IsArray,
-  IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -14,11 +15,6 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-
-export enum Gender {
-  Male = 'ذكر',
-  Female = 'انثى',
-}
 
 export class CreateUserDto {
   @IsString()
@@ -51,21 +47,25 @@ export class CreateUserDto {
 export class CreateTeacherDto extends CreateUserDto {
   @IsInt({ message: 'معرف المادة يجب أن يكون رقم صحيح' })
   @IsNotEmpty({ message: 'معرف المادة مطلوب' })
+  @Type(() => Number)
   subjectId: number;
 
   @IsArray({ message: 'الشعبة يجب أن تكون مصفوفة من المعرفات' })
   @ArrayNotEmpty({ message: 'يجب اختيار شعبة واحدة على الأقل' })
   @ArrayMinSize(1, { message: 'اختر شعبة واحدة على الأقل' })
   @IsInt({ each: true, message: 'كل معرف صف يجب أن يكون رقم صحيح' })
+  @Type(() => Number)
   divisionIds: number[];
 
   @IsArray({ message: 'الصف يجب أن يكون مصفوفة من المعرفات' })
   @ArrayNotEmpty({ message: 'يجب اختيار صف واحد على الأقل' })
   @ArrayMinSize(1, { message: 'اختر صف واحد على الأقل' })
   @IsInt({ each: true, message: 'كل معرف صف يجب أن يكون رقم صحيح' })
+  @Type(() => Number)
   gradeIds: number[];
 
   @IsInt()
+  @Type(() => Number)
   educationTypeId: number;
 }
 
@@ -89,9 +89,6 @@ export class CreateStudentDto extends CreateUserDto {
 
   @IsPhoneNumber('EG')
   parentPhoneNumber: string;
-
-  @IsBoolean()
-  isGuardianVerified: boolean;
 
   @IsInt()
   gradeId: number;

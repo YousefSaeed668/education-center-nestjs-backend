@@ -15,6 +15,10 @@ export class UpdateCourseDto {
   @IsOptional()
   @IsString()
   courseName?: string;
+  @IsOptional()
+  @Transform(({ value }) => parseInt(value))
+  @IsInt()
+  subjectId?: number;
 
   @IsOptional()
   @IsString()

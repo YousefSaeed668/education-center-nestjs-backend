@@ -20,6 +20,8 @@ model Course {
   CartItem       CartItem[]
   Comment        Comment[]
   Review         Review[]
+  subjectId      Int
+  subject        Subject         @relation(fields: [subjectId], references: [id])
 }
 
 model CourseLecture {

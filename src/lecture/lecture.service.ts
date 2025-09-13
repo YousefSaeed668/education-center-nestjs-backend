@@ -41,6 +41,7 @@ export class LectureService {
       divisionId,
       gradeId,
       lectureName,
+      subjectId,
     } = createLectureDto;
     if (isSellable && !thumbnail) {
       throw new BadRequestException(
@@ -82,7 +83,7 @@ export class LectureService {
         },
       });
 
-      if (isSellable && thumbnail) {
+      if (isSellable && thumbnail && subjectId) {
         const compressedThumbnail = await this.imageService.compressImage(
           thumbnail,
           {},
@@ -105,6 +106,7 @@ export class LectureService {
             divisionId: divisionId,
             thumbnail: thumbnailUrl.url,
             courseFeatures,
+            subjectId,
           },
         });
 

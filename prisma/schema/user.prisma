@@ -201,6 +201,7 @@ model Subject {
   id      Int       @id @default(autoincrement())
   name    String
   teacher Teacher[]
+  Course  Course[]
 
   @@unique([name])
 }
@@ -226,8 +227,8 @@ model PlatformSetting {
 }
 
 enum Gender {
-  ذكر
-  انثى
+  MALE
+  FEMALE
 }
 
 enum Role {

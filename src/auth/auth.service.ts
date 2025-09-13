@@ -17,6 +17,7 @@ import { Role } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigType } from '@nestjs/config';
 import refreshConfig from './config/refresh.token';
+import { S3Service } from 'src/s3/s3.service';
 
 @Injectable()
 export class AuthService {
@@ -24,6 +25,7 @@ export class AuthService {
     private readonly prisma: PrismaService,
     private readonly userService: UserService,
     private readonly jwtService: JwtService,
+    private readonly s3Service: S3Service,
     @Inject(refreshConfig.KEY)
     private refreshTokenConfig: ConfigType<typeof refreshConfig>,
   ) {}
@@ -48,81 +50,133 @@ export class AuthService {
     return null;
   }
 
-  async signupStudent(createStudentDto: CreateStudentDto) {
+  async signupStudent(
+    createStudentDto: CreateStudentDto,
+    file?: Express.Multer.File,
+  ) {
     await this.checkUserConflicts(
       createStudentDto.userName,
       createStudentDto.phoneNumber,
     );
-    const { password, ...data } = createStudentDto;
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const { displayName, userName, gender, phoneNumber, ...studentData } = data;
 
-    const newStudent = await this.prisma.user.create({
-      omit: {
-        password: true,
-      },
-      data: {
-        displayName,
-        userName,
-        gender,
-        phoneNumber,
-        password: hashedPassword,
-        student: {
-          create: {
-            ...studentData,
+    let profilePictureUrl: string | undefined;
+
+    try {
+      if (file) {
+        profilePictureUrl = await this.userService.handleProfilePictureUpdate(
+          null,
+          file,
+          'student/profile-picture',
+        );
+      }
+
+      const { password, ...data } = createStudentDto;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const { displayName, userName, gender, phoneNumber, ...studentData } =
+        data;
+
+      const newStudent = await this.prisma.user.create({
+        omit: {
+          password: true,
+        },
+        data: {
+          displayName,
+          userName,
+          gender,
+          phoneNumber,
+          password: hashedPassword,
+          ...(profilePictureUrl && { profilePicture: profilePictureUrl }),
+          student: {
+            create: {
+              ...studentData,
+            },
           },
         },
-      },
-    });
+      });
 
-    return newStudent;
+      return newStudent;
+    } catch (error) {
+      if (profilePictureUrl) {
+        await this.s3Service.deleteFileByUrl(profilePictureUrl).catch(() => {
+          console.error('Failed to cleanup uploaded file:', profilePictureUrl);
+        });
+      }
+      throw error;
+    }
   }
-  async signupTeacher(createTeacherDto: CreateTeacherDto) {
+  async signupTeacher(
+    createTeacherDto: CreateTeacherDto,
+    file?: Express.Multer.File,
+  ) {
     await this.checkUserConflicts(
       createTeacherDto.userName,
       createTeacherDto.phoneNumber,
     );
-    const {
-      password,
-      displayName,
-      userName,
-      gender,
-      phoneNumber,
-      subjectId,
-      educationTypeId,
-      divisionIds,
-      gradeIds,
-    } = createTeacherDto;
-    const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newTeacher = await this.prisma.user.create({
-      omit: {
-        password: true,
-      },
-      data: {
+    let profilePictureUrl: string | undefined;
+
+    try {
+      if (file) {
+        profilePictureUrl = await this.userService.handleProfilePictureUpdate(
+          null,
+          file,
+          'teacher/profile-picture',
+        );
+      }
+
+      const {
+        password,
         displayName,
         userName,
         gender,
         phoneNumber,
-        password: hashedPassword,
-        role: 'TEACHER',
-        teacher: {
-          create: {
-            subjectId,
-            educationTypeId,
-            division: {
-              connect: divisionIds.map((id) => ({ id })),
-            },
-            grade: {
-              connect: gradeIds.map((id) => ({ id })),
+        subjectId,
+        educationTypeId,
+        divisionIds,
+        gradeIds,
+      } = createTeacherDto;
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      const newTeacher = await this.prisma.user.create({
+        omit: {
+          password: true,
+        },
+        data: {
+          displayName,
+          userName,
+          gender,
+          phoneNumber,
+          password: hashedPassword,
+          role: 'TEACHER',
+          ...(profilePictureUrl && { profilePicture: profilePictureUrl }),
+          teacher: {
+            create: {
+              subjectId,
+              educationTypeId,
+              division: {
+                connect: divisionIds.map((id) => ({ id })),
+              },
+              grade: {
+                connect: gradeIds.map((id) => ({ id })),
+              },
             },
           },
         },
-      },
-    });
-    return newTeacher;
+      });
+      return newTeacher;
+    } catch (error) {
+      if (profilePictureUrl) {
+        await this.s3Service.deleteFileByUrl(profilePictureUrl).catch(() => {
+          console.error('Failed to cleanup uploaded file:', profilePictureUrl);
+        });
+      }
+      throw error;
+    }
   }
-  async signupGuardian(CreateGuardianDto: CreateUserDto) {
+  async signupGuardian(
+    CreateGuardianDto: CreateUserDto,
+    file?: Express.Multer.File,
+  ) {
     await this.checkUserConflicts(
       CreateGuardianDto.userName,
       CreateGuardianDto.phoneNumber,
@@ -133,40 +187,61 @@ export class AuthService {
 
     if (studentsWithThisPhone.length === 0) {
       throw new BadRequestException(
-        'No students found with this phone number. Students must register first.',
+        'لم يتم العثور على أي طالب بهذا الرقم. يجب على الطلاب التسجيل أولاً.',
       );
     }
-    const { password, ...data } = CreateGuardianDto;
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const { displayName, userName, gender, phoneNumber } = data;
-    const newGuardian = await this.prisma.user.create({
-      omit: {
-        password: true,
-      },
-      data: {
-        displayName,
-        userName,
-        gender,
-        phoneNumber,
-        password: hashedPassword,
-        role: 'GUARDIAN',
-        guardian: {
-          create: {
-            phoneNumber,
+
+    let profilePictureUrl: string | undefined;
+
+    try {
+      if (file) {
+        profilePictureUrl = await this.userService.handleProfilePictureUpdate(
+          null,
+          file,
+          'guardian/profile-picture',
+        );
+      }
+
+      const { password, ...data } = CreateGuardianDto;
+      const hashedPassword = await bcrypt.hash(password, 10);
+      const { displayName, userName, gender, phoneNumber } = data;
+      const newGuardian = await this.prisma.user.create({
+        omit: {
+          password: true,
+        },
+        data: {
+          displayName,
+          userName,
+          gender,
+          phoneNumber,
+          password: hashedPassword,
+          role: 'GUARDIAN',
+          ...(profilePictureUrl && { profilePicture: profilePictureUrl }),
+          guardian: {
+            create: {
+              phoneNumber,
+            },
           },
         },
-      },
-    });
-    return newGuardian;
+      });
+      return newGuardian;
+    } catch (error) {
+      if (profilePictureUrl) {
+        await this.s3Service.deleteFileByUrl(profilePictureUrl).catch(() => {
+          console.error('Failed to cleanup uploaded file:', profilePictureUrl);
+        });
+      }
+      throw error;
+    }
   }
   async validateUser(userName: string, password: string) {
     const user = await this.userService.findUserByUsername(userName);
     if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('بيانات الدخول غير صحيحة');
     }
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException('Invalid credentials');
+      throw new UnauthorizedException('بيانات الدخول غير صحيحة');
     }
     return {
       id: user.id,
@@ -188,6 +263,12 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
+      user: {
+        id: userId,
+        displayName,
+        userName,
+        role,
+      },
     };
   }
 

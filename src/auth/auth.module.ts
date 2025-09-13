@@ -14,6 +14,7 @@ import { RefreshStrategy } from './strategies/refresh-token.strategy';
 import { UserModule } from 'src/user/user.module';
 import { PrismaService } from 'src/prisma.service';
 import jwtConfig from './config/jwt.config';
+import { S3Module } from 'src/s3/s3.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import jwtConfig from './config/jwt.config';
     ConfigModule.forFeature(jwtConfig),
     ConfigModule.forFeature(refreshConfig),
     UserModule,
+    S3Module,
   ],
   controllers: [AuthController],
   providers: [

@@ -21,6 +21,7 @@ import { GuardianModule } from './guardian/guardian.module';
 import { QuizModule } from './quiz/quiz.module';
 import { CommentModule } from './comment/comment.module';
 import { ReviewModule } from './review/review.module';
+import { LookupModule } from './lookup/lookup.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { ReviewModule } from './review/review.module';
     QuizModule,
     CommentModule,
     ReviewModule,
+    LookupModule,
   ],
   controllers: [AppController],
   providers: [AppService],

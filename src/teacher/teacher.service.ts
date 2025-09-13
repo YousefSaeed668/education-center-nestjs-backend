@@ -8,8 +8,14 @@ import { S3Service } from 'src/s3/s3.service';
 import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 import { UserService } from 'src/user/user.service';
 import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
-import { TransactionType, WithdrawUserType } from '@prisma/client';
+import { Prisma, TransactionType, WithdrawUserType } from '@prisma/client';
 import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
+import {
+  GetTeachersDto,
+  TeacherQueryResult,
+  TeacherSortBy,
+  SortOrder,
+} from './dto/get-teachers.dto';
 
 @Injectable()
 export class TeacherService {
@@ -161,6 +167,132 @@ export class TeacherService {
     return {
       totalEarnings: earnings._sum.teacherShare?.toNumber() || 0,
       currentBalance: currentBalance?.balance.toNumber() || 0,
+    };
+  }
+
+  async getTeachers(getTeachersDto: GetTeachersDto) {
+    const {
+      q,
+      gradeId,
+      subjectId,
+      sortBy = TeacherSortBy.RATING,
+      sortOrder = SortOrder.DESC,
+      pageNumber = 1,
+    } = getTeachersDto;
+    const limit = 10;
+    const offset = (pageNumber - 1) * limit;
+
+    const whereConditions: Prisma.Sql[] = [Prisma.sql`t."isActive" = true`];
+
+    if (gradeId !== undefined) {
+      whereConditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM "_GradeToTeacher" gt WHERE gt."B" = t.id AND gt."A" = ${gradeId}
+      )`);
+    }
+
+    if (subjectId !== undefined) {
+      whereConditions.push(Prisma.sql`t."subjectId" = ${subjectId}`);
+    }
+
+    if (q?.trim()) {
+      whereConditions.push(
+        Prisma.sql`u."displayName" ILIKE ${'%' + q.trim() + '%'}`,
+      );
+    }
+
+    const finalWhereClause = Prisma.sql`WHERE ${Prisma.join(whereConditions, ' AND ')}`;
+
+    let orderByClause: Prisma.Sql;
+    switch (sortBy) {
+      case TeacherSortBy.DISPLAY_NAME:
+        orderByClause = Prisma.sql`u."displayName" ${Prisma.raw(sortOrder)}`;
+        break;
+      case TeacherSortBy.COURSES_COUNT:
+        orderByClause = Prisma.sql`COALESCE(course_count.course_count, 0) ${Prisma.raw(sortOrder)}`;
+        break;
+      case TeacherSortBy.BOOKS_COUNT:
+        orderByClause = Prisma.sql`COALESCE(book_count.book_count, 0) ${Prisma.raw(sortOrder)}`;
+        break;
+      case TeacherSortBy.STUDENTS_COUNT:
+        orderByClause = Prisma.sql`COALESCE(student_count.student_count, 0) ${Prisma.raw(sortOrder)}`;
+        break;
+      case TeacherSortBy.RATING:
+        orderByClause = Prisma.sql`COALESCE(teacher_rating.avg_rating, 0) ${Prisma.raw(sortOrder)}`;
+        break;
+      default:
+        orderByClause = Prisma.sql`COALESCE(teacher_rating.avg_rating, 0) ${Prisma.raw(sortOrder)}`;
+    }
+    const finalOrderByClause = Prisma.sql`ORDER BY ${orderByClause}, t.id`;
+
+    const [totalResult, teachers] = await this.prisma.$transaction([
+      this.prisma.$queryRaw<{ total_count: bigint }[]>`
+      SELECT COUNT(t.id) as "total_count"
+      FROM "Teacher" t
+      INNER JOIN "User" u ON t.id = u.id
+      ${finalWhereClause}
+    `,
+
+      this.prisma.$queryRaw<TeacherQueryResult[]>`
+      SELECT 
+        t.id ,
+        u."profilePicture",
+        u."displayName",
+        s.name as "subjectName",
+        t.bio,
+        u.gender,
+        COALESCE(teacher_rating.avg_rating, 0)::float as "avgRating",
+        COALESCE(course_count.course_count, 0) as "numberOfCourses",
+        COALESCE(book_count.book_count, 0) as "numberOfBooks",
+        COALESCE(student_count.student_count, 0) as "numberOfStudents"
+      FROM "Teacher" t
+      INNER JOIN "User" u ON t.id = u.id
+      LEFT JOIN "Subject" s ON t."subjectId" = s.id
+      LEFT JOIN (
+        SELECT 
+          c."teacherId",
+          COUNT(*)::int as course_count
+        FROM "Course" c
+        GROUP BY c."teacherId"
+      ) course_count ON t.id = course_count."teacherId"
+      LEFT JOIN (
+        SELECT 
+          b."teacherId",
+          COUNT(*)::int as book_count
+        FROM "Book" b
+        GROUP BY b."teacherId"
+      ) book_count ON t.id = book_count."teacherId"
+      LEFT JOIN (
+        SELECT 
+          c."teacherId",
+          COUNT(DISTINCT sc."studentId")::int as student_count
+        FROM "Course" c
+        LEFT JOIN "StudentCourse" sc ON c.id = sc."courseId" AND sc."isActive" = true
+        GROUP BY c."teacherId"
+      ) student_count ON t.id = student_count."teacherId"
+      LEFT JOIN (
+        SELECT 
+          c."teacherId",
+          ROUND(AVG(r.rating::numeric), 2) as avg_rating
+        FROM "Course" c
+        LEFT JOIN "Review" r ON c.id = r."courseId"
+        WHERE r.rating IS NOT NULL
+        GROUP BY c."teacherId"
+      ) teacher_rating ON t.id = teacher_rating."teacherId"
+      ${finalWhereClause}
+      ${finalOrderByClause}
+      LIMIT ${limit} OFFSET ${offset}
+    `,
+    ]);
+
+    const total = Number(totalResult[0]?.total_count || 0);
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      teachers,
+      total,
+      totalPages,
+      pageNumber,
+      pageSize: limit,
     };
   }
 }

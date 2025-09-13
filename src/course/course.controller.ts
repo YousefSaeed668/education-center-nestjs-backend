@@ -3,12 +3,14 @@ import {
   Controller,
   Delete,
   FileTypeValidator,
+  Get,
   MaxFileSizeValidator,
   Param,
   ParseFilePipe,
   ParseIntPipe,
   Post,
   Put,
+  Query,
   Req,
   UploadedFile,
   UseInterceptors,
@@ -20,12 +22,17 @@ import { CourseService } from './course.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
+import { GetCoursesDto } from './dto/get-courses.dto';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('course')
 export class CourseController {
   constructor(private readonly courseService: CourseService) {}
-  @Roles(Role.TEACHER)
-  getAllCourses() {}
+  @Public()
+  @Get('all-courses')
+  getAllCourses(@Query() query: GetCoursesDto) {
+    return this.courseService.getCourses(query);
+  }
 
   @UseInterceptors(FileInterceptor('thumbnail'))
   @Roles(Role.TEACHER)
@@ -75,5 +82,10 @@ export class CourseController {
   @Delete(':courseId')
   deleteCourse(@Req() req, @Param('courseId', ParseIntPipe) courseId: number) {
     return this.courseService.deleteCourse(req.user.id, courseId);
+  }
+
+  @Get(':id')
+  getCourse(@Param('id') id: string, @Req() req) {
+    return;
   }
 }

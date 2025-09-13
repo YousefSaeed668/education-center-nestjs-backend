@@ -22,7 +22,7 @@ class LectureContentDto {
     return typeof value === 'number' ? value : parseInt(value);
   })
   @IsNumber()
-  @Min(0)
+  @Min(1)
   orderIndex: number;
 }
 
@@ -39,8 +39,13 @@ export class CreateLectureDto {
 
   @ValidateIf((o) => o.isSellable === true)
   @IsNumber()
+  @Min(1)
+  subjectId: number;
+
+  @ValidateIf((o) => o.isSellable === true)
+  @IsNumber()
   @Transform(({ value }) => parseInt(value))
-  @Min(0)
+  @Min(1)
   orderIndex: number;
 
   @ValidateIf((o) => o.isSellable === true)
