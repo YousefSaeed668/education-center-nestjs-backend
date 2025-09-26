@@ -84,8 +84,20 @@ export class CourseController {
     return this.courseService.deleteCourse(req.user.id, courseId);
   }
 
+  @Public()
   @Get(':id')
-  getCourse(@Param('id') id: string, @Req() req) {
-    return;
+  getCourse(@Param('id', ParseIntPipe) id: number) {
+    return this.courseService.getCourse(id);
+  }
+
+  @Roles(Role.STUDENT)
+  @Get('getCourseForUser/:id')
+  getCourseForUser(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.courseService.getCourse(id, req.user.id);
+  }
+  @Public()
+  @Get('relatedCourses/:id')
+  getRelatedCourses(@Param('id', ParseIntPipe) id: number) {
+    return this.courseService.getRelatedCourses(id);
   }
 }

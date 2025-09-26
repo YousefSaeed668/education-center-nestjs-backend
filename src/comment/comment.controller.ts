@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   Param,
   ParseIntPipe,
   Post,
@@ -17,6 +18,7 @@ import { AddCommentDto } from './dto/add-comment.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { UpdateCommentDto } from './dto/update-comment.dto';
+import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('comment')
 @Roles(Role.STUDENT, Role.TEACHER)
@@ -72,5 +74,11 @@ export class CommentController {
   @Delete('delete/:id')
   deleteComment(@Req() req, @Param('id', ParseIntPipe) id: number) {
     return this.commentService.deleteComment(req.user.id, req.user.role, id);
+  }
+
+  @Public()
+  @Get('getByCourseId/:id')
+  getByCourseId(@Param('id', ParseIntPipe) id: number) {
+    return this.commentService.getByCourseId(id);
   }
 }

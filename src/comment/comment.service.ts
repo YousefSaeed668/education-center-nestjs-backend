@@ -165,4 +165,20 @@ export class CommentService {
       }
     }
   }
+
+  async getByCourseId(id: number) {
+    return this.prisma.comment.findMany({
+      where: { courseId: id },
+      include: {
+        student: true,
+        teacher: true,
+        parentComment: {
+          include: {
+            student: true,
+            teacher: true,
+          },
+        },
+      },
+    });
+  }
 }

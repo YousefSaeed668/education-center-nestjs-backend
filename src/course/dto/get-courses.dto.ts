@@ -2,16 +2,20 @@ import { CourseType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 export interface CourseQueryResult {
-  courseId: number;
+  id: number;
   thumbnail: string;
   courseName: string;
   coursePrice: number;
+  teacherId: number;
   teacherName: string;
+  teacherProfilePicture: string;
+  gradeName: string;
   subjectName: string;
   numberOfReviews: number;
   avgRating: number;
   numberOfLectures: number;
   numberOfStudents: number;
+  courseType: CourseType;
 }
 export enum CourseSortBy {
   RATING = 'rating',
@@ -81,4 +85,51 @@ export class GetCoursesDto {
   @IsOptional()
   @Type(() => Number)
   pageNumber?: number;
+}
+
+export interface Quiz {
+  id: number;
+  title: string;
+  isActive: boolean;
+  orderIndex: number;
+  description: string;
+  maxAttempts: number;
+}
+
+export type ContentType = 'FILE' | 'VIDEO';
+
+export interface LectureContent {
+  duration: number | null;
+  orderIndex: number;
+  contentName: string;
+  contentType: ContentType;
+}
+
+export interface Lecture {
+  id: number;
+  quizzes: Quiz[];
+  orderIndex: number;
+  totalItems: number;
+  lectureName: string;
+  lectureContent: LectureContent[];
+}
+
+export interface courseRow {
+  courseName: string;
+  description: string;
+  price: number;
+  courseFeatures: string[];
+
+  teacherName: string;
+  teacherProfilePicture: string;
+  teacherBio: string;
+  teacherSubject: string;
+  owned: boolean;
+  courseRating: number;
+  studentsCount: number;
+  lecturesCount: number;
+  teacherRating: number;
+  teacherTotalStudents: number;
+
+  lectures: Lecture[];
 }
