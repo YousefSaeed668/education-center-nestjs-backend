@@ -101,4 +101,9 @@ export class LookupService {
       },
     };
   }
+  async getLocationData() {
+    const cities = await this.prisma.city.findMany();
+    const governments = await this.prisma.government.findMany();
+    return { cities, governments };
+  }
 }

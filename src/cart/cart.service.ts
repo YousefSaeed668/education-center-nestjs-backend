@@ -241,21 +241,26 @@ export class CartService {
       throw new NotFoundException('اضف منتج الى عربة التسوق اولا');
     }
 
-    const result = await this.prisma.cartItem.deleteMany({
+    const cartItem = await this.prisma.cartItem.findFirst({
       where: {
+        id: itemId,
         cartId: cart.id,
-        productId: itemId,
         productType: productType,
       },
     });
 
-    return {
-      success: true,
-      message: `تم حذف ${productType === ProductType.COURSE ? 'الكورس' : 'الكتاب'} من عربة التسوق بنجاح`,
-      deletedCount: result.count,
-    };
-  }
+    if (!cartItem) {
+      throw new NotFoundException(
+        `${productType === ProductType.COURSE ? 'الكورس' : 'الكتاب'} غير موجود في عربة التسوق`,
+      );
+    }
 
+    await this.prisma.cartItem.delete({
+      where: {
+        id: cartItem.id,
+      },
+    });
+  }
   async updateQuantity(
     studentId: number,
     itemId: number,

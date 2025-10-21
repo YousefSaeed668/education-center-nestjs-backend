@@ -99,6 +99,7 @@ export interface Quiz {
 export type ContentType = 'FILE' | 'VIDEO';
 
 export interface LectureContent {
+  id: number;
   duration: number | null;
   orderIndex: number;
   contentName: string;
@@ -112,24 +113,34 @@ export interface Lecture {
   totalItems: number;
   lectureName: string;
   lectureContent: LectureContent[];
+  totalDuration: number;
+  videoCount: number;
+  fileCount: number;
+  quizCount: number;
+  formattedDuration: string;
 }
 
-export interface courseRow {
-  courseName: string;
-  description: string;
-  price: number;
-  courseFeatures: string[];
-
+export interface CourseRowTeacher {
+  id: number;
   teacherName: string;
   teacherProfilePicture: string;
   teacherBio: string;
   teacherSubject: string;
+  teacherRating: number;
+  teacherTotalStudents: number;
+  teacherTotalCourses: number;
+}
+
+export interface CourseRow {
+  courseName: string;
+  description: string;
+  price: number;
+  courseFeatures: string[];
+  teacher: CourseRowTeacher;
   owned: boolean;
   courseRating: number;
   studentsCount: number;
   lecturesCount: number;
-  teacherRating: number;
-  teacherTotalStudents: number;
-
+  quizzesCount: number;
   lectures: Lecture[];
 }

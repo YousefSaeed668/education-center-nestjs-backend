@@ -57,4 +57,9 @@ export class CartController {
       body.quantity,
     );
   }
+
+  @Delete('clear')
+  clearCart(@Req() req) {
+    return this.cartService.clearCart(req.user.id);
+  }
 }

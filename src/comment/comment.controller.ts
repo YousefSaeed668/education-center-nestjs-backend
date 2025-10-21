@@ -7,23 +7,33 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { CommentService } from './comment.service';
-import { Roles } from 'src/auth/decorators/roles.decorator';
-import { Role } from '@prisma/client';
-import { AddCommentDto } from './dto/add-comment.dto';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
-import { UpdateCommentDto } from './dto/update-comment.dto';
+import { Role } from '@prisma/client';
 import { Public } from 'src/auth/decorators/public.decorator';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
+import { CommentService } from './comment.service';
+import { AddCommentDto } from './dto/add-comment.dto';
+import { UpdateCommentDto } from './dto/update-comment.dto';
 
 @Controller('comment')
 @Roles(Role.STUDENT, Role.TEACHER)
 export class CommentController {
   constructor(private readonly commentService: CommentService) {}
+
+  @Public()
+  @Get('get-replies/:id')
+  getCommentReplies(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('cursor', new ParseIntPipe({ optional: true })) cursor?: number,
+  ) {
+    return this.commentService.getCommentReplies(id, cursor);
+  }
 
   @Post('add/:id')
   @UseInterceptors(FileInterceptor('image'))
@@ -77,8 +87,11 @@ export class CommentController {
   }
 
   @Public()
-  @Get('getByCourseId/:id')
-  getByCourseId(@Param('id', ParseIntPipe) id: number) {
-    return this.commentService.getByCourseId(id);
+  @Get('get-comments/:id')
+  getByCourseId(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('cursor', new ParseIntPipe({ optional: true })) cursor?: number,
+  ) {
+    return this.commentService.getByCourseId(id, cursor);
   }
 }

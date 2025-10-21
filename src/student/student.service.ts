@@ -1,14 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { PrismaService } from 'src/prisma.service';
-import { S3Service } from 'src/s3/s3.service';
-import { UserService } from 'src/user/user.service';
-import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
-import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
-import { PaymobService } from 'src/paymob/paymob.service';
-import { PaymentPurpose } from 'src/paymob/IPaymob';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PaymentSource, WithdrawUserType } from '@prisma/client';
+import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
+import { PaymentPurpose } from 'src/paymob/IPaymob';
+import { PaymobService } from 'src/paymob/paymob.service';
+import { PrismaService } from 'src/prisma.service';
+import { S3Service } from 'src/s3/s3.service';
 import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
+import { UserService } from 'src/user/user.service';
+import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 
 @Injectable()
 export class StudentService {
@@ -139,7 +139,7 @@ export class StudentService {
     return {
       success: true,
       message: 'تم إنشاء رابط شحن الرصيد بنجاح',
-      data: url.data,
+      data: url.url,
     };
   }
 
@@ -197,5 +197,17 @@ export class StudentService {
       WithdrawUserType.STUDENT,
       body,
     );
+  }
+
+  async getAddresses(id: number) {
+    return await this.prisma.address.findMany({
+      where: {
+        studentId: id,
+      },
+      include: {
+        government: true,
+        city: true,
+      },
+    });
   }
 }

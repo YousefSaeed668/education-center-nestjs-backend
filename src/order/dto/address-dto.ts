@@ -11,6 +11,7 @@ import {
   IsString,
   MaxLength,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
 export class AddressDto {
   @IsString({ message: 'اسم المستلم يجب أن يكون نص' })
@@ -40,8 +41,8 @@ export class AddressDto {
 
   @IsOptional()
   @IsString({ message: 'الملاحظات الإضافية يجب أن يكون نص' })
-  @MaxLength(1000, {
-    message: 'الملاحظات الإضافية يجب أن تكون أقل من 1000 حرف',
+  @MaxLength(500, {
+    message: 'الملاحظات الإضافية يجب أن تكون أقل من 500 حرف',
   })
   @Transform(({ value }) => value?.trim())
   additionalNotes?: string;
@@ -71,6 +72,7 @@ export class CreateOrderDto {
 
   @IsOptional()
   @Type(() => AddressDto)
+  @ValidateNested()
   newAddress?: AddressDto;
 
   @IsNotEmpty({ message: 'نوع الدفع مطلوب' })

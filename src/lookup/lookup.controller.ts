@@ -1,7 +1,7 @@
 import { Controller, Get, Param } from '@nestjs/common';
-import { LookupService } from './lookup.service';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { GetSignUpDataDto } from './dto/get-signup-data.dto';
+import { LookupService } from './lookup.service';
 
 @Public()
 @Controller('lookup')
@@ -20,5 +20,10 @@ export class LookupController {
   @Get('teachers')
   getTeacherData() {
     return this.lookupService.getTeacherData();
+  }
+
+  @Get('locations')
+  getLocationData() {
+    return this.lookupService.getLocationData();
   }
 }

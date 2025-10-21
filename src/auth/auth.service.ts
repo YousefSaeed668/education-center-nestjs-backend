@@ -1,23 +1,23 @@
 import {
+  BadRequestException,
   ConflictException,
+  Inject,
   Injectable,
   UnauthorizedException,
-  Inject,
-  BadRequestException,
 } from '@nestjs/common';
+import { ConfigType } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { Role } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
+import { PrismaService } from 'src/prisma.service';
+import { S3Service } from 'src/s3/s3.service';
+import { UserService } from 'src/user/user.service';
+import refreshConfig from './config/refresh.token';
 import {
   CreateStudentDto,
   CreateTeacherDto,
   CreateUserDto,
 } from './dto/create-user.dto';
-import { PrismaService } from 'src/prisma.service';
-import { UserService } from 'src/user/user.service';
-import * as bcrypt from 'bcrypt';
-import { Role } from '@prisma/client';
-import { JwtService } from '@nestjs/jwt';
-import { ConfigType } from '@nestjs/config';
-import refreshConfig from './config/refresh.token';
-import { S3Service } from 'src/s3/s3.service';
 
 @Injectable()
 export class AuthService {
@@ -89,6 +89,9 @@ export class AuthService {
           student: {
             create: {
               ...studentData,
+              Cart: {
+                create: {},
+              },
             },
           },
         },

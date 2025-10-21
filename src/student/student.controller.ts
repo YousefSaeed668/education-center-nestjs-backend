@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Post,
   Req,
   UploadedFile,
@@ -10,10 +11,10 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
+import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
+import { RechargeBalanceDto } from './dto/reacharge-balance.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { StudentService } from './student.service';
-import { RechargeBalanceDto } from './dto/reacharge-balance.dto';
-import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
 
 @Controller('student')
 @Roles(Role.STUDENT)
@@ -45,5 +46,10 @@ export class StudentController {
   @Post('withdraw-request')
   withdrawRequest(@Req() req, @Body() body: CreateWithdrawRequestDto) {
     return this.studentService.createWithdrawRequest(req.user.id, body);
+  }
+
+  @Get('get-addresses')
+  getAddresses(@Req() req) {
+    return this.studentService.getAddresses(req.user.id);
   }
 }

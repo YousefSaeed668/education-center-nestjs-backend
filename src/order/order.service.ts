@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { OnEvent, EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { PaymentSource, ProductType } from '@prisma/client';
 import { CartService } from 'src/cart/cart.service';
 import { PaymentPurpose } from 'src/paymob/IPaymob';
@@ -84,7 +84,7 @@ export class OrderService {
         return createdAddress.id;
       } catch (error) {
         console.error('Error creating new address:', error);
-        throw new BadRequestException('فشل في إنشاء العنوان الجديد');
+        throw new BadRequestException(error);
       }
     }
 
@@ -168,11 +168,7 @@ export class OrderService {
       },
     );
 
-    return {
-      success: true,
-      message: 'تم إنشاء رابط الدفع بنجاح',
-      data: url,
-    };
+    return url;
   }
 
   private async processBalanceCartPayment(
@@ -468,12 +464,8 @@ export class OrderService {
       );
 
       return {
-        success: true,
-        message: 'تم الدفع بالرصيد بنجاح',
-        data: {
-          paymentMethod: 'balance',
-          totalAmount: price,
-        },
+        paymentMethod: 'balance',
+        totalAmount: price,
       };
     }
     const paymentItem = {
@@ -503,12 +495,7 @@ export class OrderService {
         },
       },
     );
-
-    return {
-      success: true,
-      message: 'تم إنشاء رابط الدفع بنجاح',
-      data: url,
-    };
+    return url;
   }
 
   private async processBalanceDirectPayment(
@@ -642,7 +629,6 @@ export class OrderService {
           productName = book.bookName;
         }
 
-        // Create order item
         const orderItem = await tx.orderItem.create({
           data: {
             orderId: order.id,
@@ -668,7 +654,6 @@ export class OrderService {
           productPrice * platformSetting.platformPercentage.toNumber();
 
         if (teacherId) {
-          // Update teacher balance
           await tx.user.update({
             where: { id: teacherId },
             data: {
@@ -678,7 +663,6 @@ export class OrderService {
             },
           });
 
-          // Create transaction record
           await tx.transaction.create({
             data: {
               orderItemId: orderItem.id,

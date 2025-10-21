@@ -1,6 +1,6 @@
 import {
-  Injectable,
   ForbiddenException,
+  Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
@@ -15,6 +15,10 @@ export class CommentService {
     private readonly prisma: PrismaService,
     private readonly s3Service: S3Service,
   ) {}
+
+  private readonly COMMENTS_PER_PAGE = 10;
+  private readonly REPLIES_PER_PAGE = 10;
+
   private validateCommentOwnership(comment: any, userId: number, role: Role) {
     const isOwner =
       (role === Role.STUDENT && comment.studentId === userId) ||
@@ -24,6 +28,7 @@ export class CommentService {
       throw new ForbiddenException('ليس لديك صلاحية لتعديل أو حذف هذا التعليق');
     }
   }
+
   async deleteComment(userId: number, role: Role, commentId: number) {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
@@ -51,6 +56,8 @@ export class CommentService {
 
     return { message: 'تم حذف التعليق بنجاح' };
   }
+
+
   async updateComment(
     userId: number,
     role: Role,
@@ -70,11 +77,14 @@ export class CommentService {
     }
 
     await this.validateCourseAccess(userId, role, comment.courseId);
-
     this.validateCommentOwnership(comment, userId, role);
 
     let imageUrl = comment.commentImageUrl;
-    if (image) {
+
+    if (body.removeImage && comment.commentImageUrl) {
+      await this.s3Service.deleteFileByUrl(comment.commentImageUrl);
+      imageUrl = null;
+    } else if (image) {
       if (comment.commentImageUrl) {
         await this.s3Service.deleteFileByUrl(comment.commentImageUrl);
       }
@@ -91,7 +101,9 @@ export class CommentService {
       where: { id: commentId },
       data: {
         ...(body.text && { text: body.text }),
-        ...(image && { commentImageUrl: imageUrl }),
+        ...(body.removeImage !== undefined || image
+          ? { commentImageUrl: imageUrl }
+          : {}),
       },
       include: {
         student: true,
@@ -128,7 +140,7 @@ export class CommentService {
         },
       });
       if (!parentComment) {
-        throw new ForbiddenException('التعليق الرئيسي غير موجود');
+        throw new ForbiddenException('التعليق الرئيسي غير موجود');
       }
     }
     await this.prisma.comment.create({
@@ -142,6 +154,7 @@ export class CommentService {
       },
     });
   }
+
   private async validateCourseAccess(
     userId: number,
     role: Role,
@@ -166,19 +179,103 @@ export class CommentService {
     }
   }
 
-  async getByCourseId(id: number) {
-    return this.prisma.comment.findMany({
-      where: { courseId: id },
+  async getByCourseId(courseId: number, cursor?: number) {
+    const limit = this.COMMENTS_PER_PAGE;
+
+    const totalCount = await this.prisma.comment.count({
+      where: { courseId: courseId, parentCommentId: null },
+    });
+
+    const comments = await this.prisma.comment.findMany({
+      where: { courseId: courseId, parentCommentId: null },
+      ...this.getCommentIncludes(),
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      ...(cursor && {
+        skip: 1,
+        cursor: { id: cursor },
+      }),
+    });
+
+    const hasMore = comments.length > limit;
+
+    const data = hasMore ? comments.slice(0, limit) : comments;
+
+    const nextCursor = hasMore ? data[data.length - 1].id : null;
+
+    return {
+      data,
+      pagination: {
+        nextCursor,
+        hasMore,
+        totalCount,
+      },
+    };
+  }
+
+  async getCommentReplies(commentId: number, cursor?: number) {
+    const limit = this.REPLIES_PER_PAGE;
+
+    const totalCount = await this.prisma.comment.count({
+      where: { parentCommentId: commentId },
+    });
+
+    const replies = await this.prisma.comment.findMany({
+      where: { parentCommentId: commentId },
+      ...this.getCommentIncludes(),
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      ...(cursor && {
+        skip: 1,
+        cursor: { id: cursor },
+      }),
+    });
+
+    const hasMore = replies.length > limit;
+
+    const data = hasMore ? replies.slice(0, limit) : replies;
+
+    const nextCursor = hasMore ? data[data.length - 1].id : null;
+
+    return {
+      data,
+      pagination: {
+        nextCursor,
+        hasMore,
+        totalCount,
+      },
+    };
+  }
+
+  private getCommentIncludes() {
+    return {
       include: {
-        student: true,
-        teacher: true,
-        parentComment: {
-          include: {
-            student: true,
-            teacher: true,
+        student: {
+          select: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                profilePicture: true,
+              },
+            },
           },
         },
+        teacher: {
+          select: {
+            user: {
+              select: {
+                id: true,
+                displayName: true,
+                profilePicture: true,
+              },
+            },
+          },
+        },
+        _count: {
+          select: { replies: true },
+        },
       },
-    });
+    };
   }
 }

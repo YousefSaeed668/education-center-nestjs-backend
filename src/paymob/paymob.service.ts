@@ -6,9 +6,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as crypto from 'crypto';
-import { IPaymob, PaymentContext, PaymentPurpose } from './IPaymob';
-import { PrismaService } from 'src/prisma.service';
 import { AdminService } from 'src/admin/admin.service';
+import { PrismaService } from 'src/prisma.service';
+import { IPaymob, PaymentContext, PaymentPurpose } from './IPaymob';
 
 @Injectable()
 export class PaymobService implements IPaymob {
@@ -143,7 +143,7 @@ export class PaymobService implements IPaymob {
     );
     return {
       paymentId: orderId,
-      data: `https://accept.paymobsolutions.com/api/acceptance/iframes/${this.frameId}?payment_token=${token}`,
+      url: `https://accept.paymobsolutions.com/api/acceptance/iframes/${this.frameId}?payment_token=${token}`,
     };
   }
 

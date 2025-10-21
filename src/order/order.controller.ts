@@ -7,10 +7,10 @@ import {
   Post,
   Req,
 } from '@nestjs/common';
-import { OrderService } from './order.service';
-import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ProductType, Role } from '@prisma/client';
+import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CreateOrderDto } from './dto/address-dto';
+import { OrderService } from './order.service';
 
 @Controller('order')
 @Roles(Role.STUDENT)
