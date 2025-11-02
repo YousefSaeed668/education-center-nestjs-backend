@@ -1,18 +1,18 @@
 model Course {
-  id             Int             @id @default(autoincrement())
-  courseName     String
-  courseType     CourseType
-  thumbnail      String
-  price          Decimal         @db.Decimal(10, 2)
-  teacherId      Int
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  gradeId        Int
-  description    String?
-  divisionId     Int?
+  id          Int        @id @default(autoincrement())
+  courseName  String
+  courseType  CourseType
+  thumbnail   String
+  price       Decimal    @db.Decimal(10, 2)
+  teacherId   Int
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  gradeId     Int
+  description String?
+
   courseFeatures String[]
   expiresAt      DateTime?
-  Division       Division?       @relation(fields: [divisionId], references: [id])
+  Division       Division[]
   grade          Grade           @relation(fields: [gradeId], references: [id])
   teacher        Teacher         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   CourseLecture  CourseLecture[]
@@ -38,13 +38,12 @@ model CourseLecture {
 model Lecture {
   id             Int              @id @default(autoincrement())
   lectureName    String
-  divisionId     Int?
   gradeId        Int?
   createdAt      DateTime         @default(now())
   teacherId      Int
   updatedAt      DateTime         @updatedAt
   CourseLecture  CourseLecture[]
-  Division       Division?        @relation(fields: [divisionId], references: [id])
+  Division       Division[]
   Grade          Grade?           @relation(fields: [gradeId], references: [id])
   teacher        Teacher          @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   LectureContent LectureContent[]

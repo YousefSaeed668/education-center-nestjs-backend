@@ -1,4 +1,4 @@
-import { Injectable, ValidationPipe, ArgumentMetadata } from '@nestjs/common';
+import { ArgumentMetadata, Injectable, ValidationPipe } from '@nestjs/common';
 
 @Injectable()
 export class MultipartValidationPipe extends ValidationPipe {
@@ -44,6 +44,7 @@ export class MultipartValidationPipe extends ValidationPipe {
       'lectureContents',
       'courseFeatures',
       'deletedContentIds',
+      'files',
       // Add more fields as needed
     ];
     fieldsToTransform.forEach((field) => {

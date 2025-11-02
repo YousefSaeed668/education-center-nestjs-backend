@@ -50,6 +50,43 @@ export class AuthService {
     return null;
   }
 
+  private async validateGradeDivisions(
+    gradeIds: number[],
+    divisionIds: number[],
+  ) {
+    const divisions = await this.prisma.division.findMany({
+      where: {
+        id: {
+          in: divisionIds,
+        },
+      },
+      select: {
+        id: true,
+        gradeId: true,
+      },
+    });
+
+    const gradeToDivisions = new Map<number, number[]>();
+    divisions.forEach((division) => {
+      const existing = gradeToDivisions.get(division.gradeId) || [];
+      existing.push(division.id);
+      gradeToDivisions.set(division.gradeId, existing);
+    });
+
+    const gradesWithoutDivisions: number[] = [];
+    gradeIds.forEach((gradeId) => {
+      if (!gradeToDivisions.has(gradeId)) {
+        gradesWithoutDivisions.push(gradeId);
+      }
+    });
+
+    if (gradesWithoutDivisions.length > 0) {
+      throw new BadRequestException(
+        `يجب اختيار شعبة واحدة على الأقل لكل صف. الصفوف التالية لا تحتوي على شعب: ${gradesWithoutDivisions.join(', ')}`,
+      );
+    }
+  }
+
   async signupStudent(
     createStudentDto: CreateStudentDto,
     file?: Express.Multer.File,
@@ -138,6 +175,9 @@ export class AuthService {
         divisionIds,
         gradeIds,
       } = createTeacherDto;
+
+      await this.validateGradeDivisions(gradeIds, divisionIds);
+
       const hashedPassword = await bcrypt.hash(password, 10);
 
       const newTeacher = await this.prisma.user.create({
@@ -251,6 +291,8 @@ export class AuthService {
       displayName: user.displayName,
       userName: user.userName,
       role: user.role,
+      balance: user.balance,
+      profilePicture: user.profilePicture,
     };
   }
 
@@ -259,6 +301,8 @@ export class AuthService {
     displayName: string,
     userName: string,
     role: Role,
+    balance: number,
+    profilePicture: string | null,
   ) {
     const { accessToken, refreshToken } = await this.generateTokens(userId);
     const hashedRt = await bcrypt.hash(refreshToken, 10);
@@ -271,6 +315,8 @@ export class AuthService {
         displayName,
         userName,
         role,
+        balance,
+        profilePicture,
       },
     };
   }

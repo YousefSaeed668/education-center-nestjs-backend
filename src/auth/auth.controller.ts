@@ -3,21 +3,21 @@ import {
   Controller,
   Post,
   Req,
-  UseGuards,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { AuthService } from './auth.service';
+import { Public } from './decorators/public.decorator';
 import {
   CreateStudentDto,
   CreateTeacherDto,
   CreateUserDto,
 } from './dto/create-user.dto';
 import { LocalAuthGuard } from './guards/local-auth.guard';
-import { Public } from './decorators/public.decorator';
 import { RefreshAuthGuard } from './guards/refresh-auth.guard';
-import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 
 @Controller('auth')
 export class AuthController {
@@ -83,6 +83,8 @@ export class AuthController {
       req.user.displayName,
       req.user.userName,
       req.user.role,
+      req.user.balance,
+      req.user.profilePicture,
     );
   }
 

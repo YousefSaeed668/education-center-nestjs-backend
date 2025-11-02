@@ -4,13 +4,16 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+
 import {
   Injectable,
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Readable } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
 @Injectable()
 export class S3Service {
@@ -126,6 +129,77 @@ export class S3Service {
       return { message: 'تم حذف الملف بنجاح' };
     } catch (error) {
       throw new Error(error);
+    }
+  }
+  async generatePresignedUploadUrl(
+    key: string,
+    contentType: string,
+    expiresIn: number = 3600,
+    maxFileSize?: number,
+  ): Promise<{ url: string; fields: Record<string, string> }> {
+    try {
+      const conditions: any[] = [
+        { bucket: this.bucketName },
+        { key: key },
+        ['content-length-range', 0, maxFileSize || 100 * 1024 * 1024],
+      ];
+
+      const { url, fields } = await createPresignedPost(this.client, {
+        Bucket: this.bucketName,
+        Key: key,
+        Conditions: conditions,
+        Fields: {
+          'Content-Type': contentType,
+        },
+        Expires: expiresIn,
+      });
+
+      return { url, fields };
+    } catch (error) {
+      Logger.error('Error generating pre-signed upload URL:', error);
+      throw new InternalServerErrorException(
+        'فشل في إنشاء رابط التحميل المؤقت',
+      );
+    }
+  }
+  async checkFileExists(key: string): Promise<boolean> {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+      });
+      await this.client.send(command);
+      return true;
+    } catch (error) {
+      if (
+        error.name === 'NoSuchKey' ||
+        error.$metadata?.httpStatusCode === 404
+      ) {
+        return false;
+      }
+      Logger.error('Error checking if file exists:', error);
+      throw new InternalServerErrorException('فشل في التحقق من وجود الملف');
+    }
+  }
+  async getFileStream(s3Key: string): Promise<Readable> {
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: s3Key,
+      });
+
+      const response = await this.client.send(command);
+
+      if (!response.Body) {
+        throw new InternalServerErrorException('لا يمكن قراءة الملف من S3.');
+      }
+
+      return response.Body as unknown as Readable;
+    } catch (error) {
+      Logger.error('Error getting file stream from S3:', error);
+      throw new InternalServerErrorException(
+        `فشل في قراءة الملف من S3: ${error.message}`,
+      );
     }
   }
 }

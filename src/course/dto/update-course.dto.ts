@@ -37,12 +37,17 @@ export class UpdateCourseDto {
   @IsOptional()
   @Transform(({ value }) => parseInt(value))
   @IsInt()
+  @Min(1)
   gradeId?: number;
 
   @IsOptional()
-  @Transform(({ value }) => parseInt(value))
-  @IsInt()
-  divisionId?: number;
+  @Transform(({ value }) => {
+    return Array.isArray(value) ? value.map((v: any) => parseInt(v)) : [];
+  })
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  divisionIds?: number[];
 
   @IsOptional()
   @IsArray()

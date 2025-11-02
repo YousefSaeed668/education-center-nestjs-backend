@@ -3,25 +3,19 @@ import {
   Controller,
   Delete,
   Param,
-  ParseFilePipe,
   ParseIntPipe,
   Post,
   Put,
   Req,
-  UploadedFiles,
+  UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import {
-  FileFieldsInterceptor,
-  FilesInterceptor,
-} from '@nestjs/platform-express';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
-import {
-  LectureFilesValidationPipe,
-  LectureUploadValidationPipe,
-} from 'src/pipes/file-validation.pipe';
+import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { CreateLectureDto } from './dto/create-lecture.dto';
+import { GenerateUploadUrlsDto } from './dto/generate-upload-urls.dto';
 import { UpdateLectureDto } from './dto/update-lecture.dto';
 import { LectureService } from './lecture.service';
 
@@ -29,52 +23,53 @@ import { LectureService } from './lecture.service';
 export class LectureController {
   constructor(private readonly lectureService: LectureService) {}
   @Roles(Role.TEACHER)
+  @Post('generate-upload-urls')
+  generateUploadUrls(@Req() req, @Body() body: GenerateUploadUrlsDto) {
+    return this.lectureService.generateUploadUrls(req.user.id, body);
+  }
+  @Roles(Role.TEACHER)
   @Post('create-lecture')
-  @UseInterceptors(
-    FileFieldsInterceptor([
-      { name: 'files', maxCount: 10 },
-      { name: 'thumbnail', maxCount: 1 },
-    ]),
-  )
+  @UseInterceptors(FileInterceptor('thumbnail'))
   createLecture(
     @Req() req,
     @Body()
     body: CreateLectureDto,
-    @UploadedFiles(
-      new ParseFilePipe({
-        fileIsRequired: true,
+    @UploadedFile(
+      new ImageValidationPipe({
+        isRequired: false,
+        maxSize: 5 * 1024 * 1024,
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
       }),
-      LectureUploadValidationPipe,
     )
-    validatedFiles: {
-      files: Express.Multer.File[];
-      thumbnail?: Express.Multer.File;
-    },
+    file?: Express.Multer.File,
   ) {
-    return this.lectureService.createLecture(
+    return this.lectureService.createLecture(req.user.id, body, file);
+  }
+  @Roles(Role.TEACHER)
+  @Post('generate-upload-urls-for-update/:lectureId')
+  generateUploadUrlsForUpdate(
+    @Req() req,
+    @Param('lectureId', ParseIntPipe) lectureId: number,
+    @Body() body: { files: GenerateUploadUrlsDto['files'] },
+  ) {
+    return this.lectureService.generateUploadUrlsForUpdate(
       req.user.id,
-      body,
-      validatedFiles.files,
-      validatedFiles.thumbnail,
+      lectureId,
+      body.files,
     );
   }
-
   @Roles(Role.TEACHER)
   @Put(':lectureId')
-  @UseInterceptors(FilesInterceptor('files', 10))
   updateLecture(
     @Req() req,
     @Param('lectureId', ParseIntPipe) lectureId: number,
     @Body()
     updateLectureDto: UpdateLectureDto,
-    @UploadedFiles(new LectureFilesValidationPipe({ isRequired: false }))
-    files: Express.Multer.File[],
   ) {
     return this.lectureService.updateLecture(
       req.user.id,
       lectureId,
       updateLectureDto,
-      files,
     );
   }
 

@@ -34,7 +34,7 @@ export class CourseService {
     body: CreateCourseDto,
     thumbnail: Express.Multer.File,
   ) {
-    const { lectureIds, ...rest } = body;
+    const { lectureIds, divisionIds, ...rest } = body;
 
     return await this.prisma.$transaction(async (prisma) => {
       const existingSubject = await prisma.subject.findUnique({
@@ -79,6 +79,9 @@ export class CourseService {
           ...rest,
           teacherId: teacherId,
           thumbnail: url,
+          Division: {
+            connect: divisionIds.map((id) => ({ id })),
+          },
         },
       });
 
@@ -166,9 +169,9 @@ export class CourseService {
         );
       }
 
-      const filteredData = Object.fromEntries(
+      const filteredData: any = Object.fromEntries(
         Object.entries(updateCourseDto).filter(
-          ([, value]) => value !== undefined,
+          ([key, value]) => value !== undefined && key !== 'divisionIds',
         ),
       );
 
@@ -189,6 +192,15 @@ export class CourseService {
         filteredData.thumbnail = thumbnailUrl.url;
       }
 
+      if (
+        updateCourseDto.divisionIds &&
+        updateCourseDto.divisionIds.length > 0
+      ) {
+        filteredData.Division = {
+          set: updateCourseDto.divisionIds.map((id) => ({ id })),
+        };
+      }
+
       await prisma.course.update({
         where: { id: courseId },
         data: filteredData,
@@ -196,7 +208,7 @@ export class CourseService {
 
       if (
         existingCourse._count.CourseLecture == 1 &&
-        (updateCourseDto.gradeId || updateCourseDto.divisionId)
+        (updateCourseDto.gradeId || updateCourseDto.divisionIds)
       ) {
         const courseLecture = await prisma.courseLecture.findFirst({
           where: {
@@ -204,14 +216,18 @@ export class CourseService {
           },
         });
         if (courseLecture) {
-          const lectureUpdateData: { gradeId?: number; divisionId?: number } =
-            {};
+          const lectureUpdateData: any = {};
           if (updateCourseDto.gradeId) {
             lectureUpdateData.gradeId = updateCourseDto.gradeId;
           }
 
-          if (updateCourseDto.divisionId) {
-            lectureUpdateData.divisionId = updateCourseDto.divisionId;
+          if (
+            updateCourseDto.divisionIds &&
+            updateCourseDto.divisionIds.length > 0
+          ) {
+            lectureUpdateData.Division = {
+              set: updateCourseDto.divisionIds.map((id) => ({ id })),
+            };
           }
           await prisma.lecture.update({
             where: { id: courseLecture.lectureId },
@@ -244,7 +260,12 @@ export class CourseService {
     if (gradeId !== undefined)
       whereConditions.push(Prisma.sql`c."gradeId" = ${gradeId}`);
     if (divisionId !== undefined)
-      whereConditions.push(Prisma.sql`c."divisionId" = ${divisionId}`);
+      whereConditions.push(
+        Prisma.sql`EXISTS (
+          SELECT 1 FROM "_CourseToDivision" cd 
+          WHERE cd."A" = c.id AND cd."B" = ${divisionId}
+        )`,
+      );
     if (teacherId !== undefined)
       whereConditions.push(Prisma.sql`c."teacherId" = ${teacherId}`);
     if (subjectId !== undefined)

@@ -1,19 +1,19 @@
+import * as ffprobe from '@ffprobe-installer/ffprobe';
 import {
   BadRequestException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CreateLectureDto } from './dto/create-lecture.dto';
-import { S3Service } from 'src/s3/s3.service';
-import * as ffmpeg from 'fluent-ffmpeg';
-import * as ffprobe from '@ffprobe-installer/ffprobe';
-import { Readable } from 'stream';
-import { PrismaService } from 'src/prisma.service';
-import { ImageService } from 'src/common/services/image.service';
-import { UpdateLectureDto } from './dto/update-lecture.dto';
-import { HandleFiles } from 'src/common/services/handleFiles.service';
 import { CourseType } from '@prisma/client';
-
+import * as ffmpeg from 'fluent-ffmpeg';
+import { HandleFiles } from 'src/common/services/handleFiles.service';
+import { ImageService } from 'src/common/services/image.service';
+import { PrismaService } from 'src/prisma.service';
+import { S3Service } from 'src/s3/s3.service';
+import { v4 as uuidv4 } from 'uuid';
+import { CreateLectureDto } from './dto/create-lecture.dto';
+import { GenerateUploadUrlsDto } from './dto/generate-upload-urls.dto';
+import { UpdateLectureDto } from './dto/update-lecture.dto';
 ffmpeg.setFfprobePath(ffprobe.path);
 
 @Injectable()
@@ -24,11 +24,89 @@ export class LectureService {
     private readonly imageService: ImageService,
     private readonly handleFiles: HandleFiles,
   ) {}
+  async generateUploadUrls(
+    teacherId: number,
+    generateUploadUrlsDto: GenerateUploadUrlsDto,
+  ) {
+    const { lectureName, files } = generateUploadUrlsDto;
+    const sanitizedLectureName = this.sanitizeFolderName(lectureName);
 
+    const uploadUrls = await Promise.all(
+      files.map(async (file) => {
+        const fileExtension = file.fileName.split('.').pop();
+        const uniqueFileName = `${uuidv4()}.${fileExtension}`;
+        const s3Key = `courses/teacher-${teacherId}/${sanitizedLectureName}/${uniqueFileName}`;
+        const uploadUrl = await this.s3Service.generatePresignedUploadUrl(
+          s3Key,
+          file.contentType,
+          3600,
+          file.size,
+        );
+
+        return {
+          fileName: file.fileName,
+          uploadUrl,
+          s3Key,
+          contentType: file.contentType,
+        };
+      }),
+    );
+
+    return {
+      uploadUrls,
+      expiresIn: 3600,
+    };
+  }
+
+  async generateUploadUrlsForUpdate(
+    teacherId: number,
+    lectureId: number,
+    files: GenerateUploadUrlsDto['files'],
+  ) {
+    const lecture = await this.prisma.lecture.findFirst({
+      where: {
+        id: lectureId,
+        teacherId: teacherId,
+      },
+    });
+
+    if (!lecture) {
+      throw new NotFoundException(
+        'المحاضرة غير موجودة أو ليس لديك صلاحية للوصول إليها',
+      );
+    }
+    const sanitizedLectureName = this.sanitizeFolderName(lecture.lectureName);
+
+    const uploadUrls = await Promise.all(
+      files.map(async (file) => {
+        const fileExtension = file.fileName.split('.').pop();
+        const uniqueFileName = `${uuidv4()}.${fileExtension}`;
+        const s3Key = `courses/teacher-${teacherId}/${sanitizedLectureName}/${uniqueFileName}`;
+        const maxSizeWithOverhead = file.size + 300 * 1024;
+        const uploadUrl = await this.s3Service.generatePresignedUploadUrl(
+          s3Key,
+          file.contentType,
+          3600,
+          maxSizeWithOverhead,
+        );
+
+        return {
+          fileName: file.fileName,
+          uploadUrl,
+          s3Key,
+          contentType: file.contentType,
+        };
+      }),
+    );
+
+    return {
+      uploadUrls,
+      expiresIn: 3600,
+    };
+  }
   async createLecture(
     teacherId: number,
     createLectureDto: CreateLectureDto,
-    files: Express.Multer.File[],
     thumbnail?: Express.Multer.File,
   ) {
     const {
@@ -38,43 +116,64 @@ export class LectureService {
       courseFeatures,
       orderIndex,
       price,
-      divisionId,
+      divisionIds,
       gradeId,
       lectureName,
-      subjectId,
     } = createLectureDto;
+    const teacher = await this.prisma.teacher.findUnique({
+      where: { id: teacherId },
+      select: { subjectId: true },
+    });
+    if (!teacher || !teacher.subjectId) {
+      throw new BadRequestException(
+        'المعلم غير موجود أو غير مرتبط بأي مادة دراسية. لا يمكن إنشاء محاضرة.',
+      );
+    }
+    const subjectId: number = teacher.subjectId;
+    const sanitizedLectureName = this.sanitizeFolderName(lectureName);
+
     if (isSellable && !thumbnail) {
       throw new BadRequestException(
         'الصورة المصغرة مطلوبة عندما تكون المحاضرة قابلة للبيع',
       );
     }
-    if (bodyLectureContents.length !== files.length) {
-      throw new BadRequestException(
-        'عدد محتويات المحاضرة يجب أن يطابق عدد الملفات',
-      );
-    }
 
-    const handleFiles = await this.uploadLectureFiles(
-      `courses/teacher-${teacherId}/${lectureName}`,
-      files,
-    );
+    const lectureContents = await Promise.all(
+      bodyLectureContents.map(async (content) => {
+        const fileExists = await this.s3Service.checkFileExists(content.s3Key);
+        if (!fileExists) {
+          throw new BadRequestException(
+            `الملف بالمفتاح ${content.s3Key} غير موجود في S3`,
+          );
+        }
 
-    const lectureContents = bodyLectureContents.map((content, index) => ({
-      ...content,
-      contentUrl: handleFiles[index].contentUrl,
-      contentType: handleFiles[index].contentType,
-      ...(handleFiles[index].duration && {
-        duration: Number(handleFiles[index].duration),
+        const contentType = this.getContentTypeFromS3Key(content.s3Key);
+        const contentUrl = this.s3Service.getFileUrl(content.s3Key).url;
+
+        let duration: number | undefined;
+        if (contentType === 'VIDEO') {
+          duration = await this.getVideoDurationFromS3(content.s3Key);
+        }
+
+        return {
+          contentName: content.contentName,
+          orderIndex: content.orderIndex,
+          contentUrl,
+          contentType,
+          ...(duration && { duration: Number(duration) }),
+        };
       }),
-    }));
+    );
 
     return await this.prisma.$transaction(async (prisma) => {
       const lecture = await prisma.lecture.create({
         data: {
           lectureName,
-          divisionId,
           gradeId,
           teacherId: teacherId,
+          Division: {
+            connect: divisionIds.map((id) => ({ id })),
+          },
           LectureContent: {
             createMany: {
               data: lectureContents,
@@ -83,7 +182,7 @@ export class LectureService {
         },
       });
 
-      if (isSellable && thumbnail && subjectId) {
+      if (isSellable && thumbnail) {
         const compressedThumbnail = await this.imageService.compressImage(
           thumbnail,
           {},
@@ -92,9 +191,8 @@ export class LectureService {
         const thumbnailUrl = await this.s3Service.uploadSingleFile({
           file: compressedThumbnail,
           isPublic: true,
-          folder: `courses/teacher-${teacherId}/${lectureName}`,
+          folder: `courses/teacher-${teacherId}/${sanitizedLectureName}`,
         });
-
         const course = await prisma.course.create({
           data: {
             courseName: lectureName,
@@ -103,10 +201,12 @@ export class LectureService {
             price: price,
             teacherId: teacherId,
             gradeId: gradeId,
-            divisionId: divisionId,
             thumbnail: thumbnailUrl.url,
             courseFeatures,
             subjectId,
+            Division: {
+              connect: divisionIds.map((id) => ({ id })),
+            },
           },
         });
 
@@ -127,7 +227,6 @@ export class LectureService {
     teacherId: number,
     lectureId: number,
     updateLectureDto: UpdateLectureDto,
-    newFiles?: Express.Multer.File[],
   ) {
     const existingLecture = await this.prisma.lecture.findFirst({
       where: {
@@ -157,15 +256,21 @@ export class LectureService {
     }
 
     return await this.prisma.$transaction(async (prisma) => {
-      const basicUpdateData = {
+      const basicUpdateData: any = {
         ...(updateLectureDto.lectureName && {
           lectureName: updateLectureDto.lectureName,
         }),
         ...(updateLectureDto.gradeId && { gradeId: updateLectureDto.gradeId }),
-        ...(updateLectureDto.divisionId && {
-          divisionId: updateLectureDto.divisionId,
-        }),
       };
+
+      if (
+        updateLectureDto.divisionIds &&
+        updateLectureDto.divisionIds.length > 0
+      ) {
+        basicUpdateData.Division = {
+          set: updateLectureDto.divisionIds.map((id) => ({ id })),
+        };
+      }
 
       await prisma.lecture.update({
         where: { id: lectureId },
@@ -207,27 +312,36 @@ export class LectureService {
           (content) => !content.id,
         );
 
-        if (newContentData.length > 0 && newFiles && newFiles.length > 0) {
-          if (newContentData.length !== newFiles.length) {
-            throw new BadRequestException(
-              'عدد محتويات المحاضرة الجديدة يجب أن يطابق عدد الملفات الجديدة',
-            );
-          }
+        if (newContentData.length > 0) {
+          const newContents = await Promise.all(
+            newContentData.map(async (content) => {
+              const fileExists = await this.s3Service.checkFileExists(
+                content.s3Key,
+              );
+              if (!fileExists) {
+                throw new BadRequestException(
+                  `الملف بالمفتاح ${content.s3Key} غير موجود في S3`,
+                );
+              }
 
-          const uploadedFiles = await this.uploadLectureFiles(
-            `courses/teacher-${teacherId}/${existingLecture.lectureName}`,
-            newFiles,
-          );
+              const contentType = this.getContentTypeFromS3Key(content.s3Key);
+              const contentUrl = this.s3Service.getFileUrl(content.s3Key).url;
 
-          const newContents = newContentData.map((content, index) => ({
-            ...content,
-            contentUrl: uploadedFiles[index].contentUrl,
-            contentType: uploadedFiles[index].contentType,
-            lectureId: lectureId,
-            ...(uploadedFiles[index].duration && {
-              duration: Number(uploadedFiles[index].duration),
+              let duration: number | undefined;
+              if (contentType === 'VIDEO') {
+                duration = await this.getVideoDurationFromS3(content.s3Key);
+              }
+
+              return {
+                contentName: content.contentName,
+                orderIndex: content.orderIndex,
+                contentUrl,
+                contentType,
+                lectureId: lectureId,
+                ...(duration && { duration: Number(duration) }),
+              };
             }),
-          }));
+          );
 
           await prisma.lectureContent.createMany({
             data: newContents,
@@ -245,7 +359,7 @@ export class LectureService {
         }
       }
 
-      if (updateLectureDto.gradeId || updateLectureDto.divisionId) {
+      if (updateLectureDto.gradeId || updateLectureDto.divisionIds) {
         const coursesToUpdate = existingLecture.CourseLecture.filter(
           (courseLecture) =>
             courseLecture.course.courseType === 'حصة' &&
@@ -253,18 +367,25 @@ export class LectureService {
         ).map((courseLecture) => courseLecture.course.id);
 
         if (coursesToUpdate.length > 0) {
-          const updateData: { gradeId?: number; divisionId?: number } = {};
-          if (updateLectureDto.gradeId) {
-            updateData.gradeId = updateLectureDto.gradeId;
-          }
-          if (updateLectureDto.divisionId) {
-            updateData.divisionId = updateLectureDto.divisionId;
-          }
+          for (const courseId of coursesToUpdate) {
+            const updateData: any = {};
+            if (updateLectureDto.gradeId) {
+              updateData.gradeId = updateLectureDto.gradeId;
+            }
+            if (
+              updateLectureDto.divisionIds &&
+              updateLectureDto.divisionIds.length > 0
+            ) {
+              updateData.Division = {
+                set: updateLectureDto.divisionIds.map((id) => ({ id })),
+              };
+            }
 
-          await prisma.course.updateMany({
-            where: { id: { in: coursesToUpdate } },
-            data: updateData,
-          });
+            await prisma.course.update({
+              where: { id: courseId },
+              data: updateData,
+            });
+          }
         }
       }
 
@@ -279,7 +400,7 @@ export class LectureService {
 
   async deleteLecture(teacherId: number, lectureId: number) {
     return await this.prisma.$transaction(async (prisma) => {
-      const existingLecture = await prisma.lecture.findUnique({
+      const existingLecture = await prisma.lecture.findFirst({
         where: {
           id: lectureId,
           teacherId,
@@ -301,6 +422,7 @@ export class LectureService {
           },
         },
       });
+
       if (!existingLecture) {
         throw new NotFoundException(
           'المحاضرة غير موجودة أو ليس لديك صلاحية لحذفها',
@@ -309,17 +431,46 @@ export class LectureService {
 
       await Promise.all(
         existingLecture.LectureContent.map(async (content) => {
-          await this.s3Service.deleteFileByUrl(content.contentUrl);
+          try {
+            await this.s3Service.deleteFileByUrl(content.contentUrl);
+          } catch (error) {
+            console.error(
+              `Failed to delete S3 file: ${content.contentUrl}`,
+              error,
+            );
+          }
         }),
       );
+
       const coursesToDelete = existingLecture.CourseLecture.filter(
         (courseLecture) => courseLecture.course._count.CourseLecture === 1,
-      ).map((courseLecture) => courseLecture.course.id);
+      ).map((courseLecture) => courseLecture.course);
 
       if (coursesToDelete.length > 0) {
+        await Promise.all(
+          coursesToDelete.map(async (course) => {
+            try {
+              await this.s3Service.deleteFileByUrl(course.thumbnail);
+            } catch (error) {
+              console.error(
+                `Failed to delete course thumbnail: ${course.thumbnail}`,
+                error,
+              );
+            }
+          }),
+        );
+
+        const courseIds = coursesToDelete.map((course) => course.id);
+
+        await prisma.courseLecture.deleteMany({
+          where: {
+            courseId: { in: courseIds },
+          },
+        });
+
         await prisma.course.deleteMany({
           where: {
-            id: { in: coursesToDelete },
+            id: { in: courseIds },
           },
         });
       }
@@ -327,66 +478,55 @@ export class LectureService {
       await prisma.lecture.delete({
         where: { id: lectureId },
       });
+
+      return {
+        success: true,
+        message: 'تم حذف المحاضرة بنجاح',
+      };
     });
   }
+  private sanitizeFolderName(name: string): string {
+    return name
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[^\w\-أ-ي]/g, '')
+      .toLowerCase();
+  }
+  private getContentTypeFromS3Key(s3Key: string): 'FILE' | 'VIDEO' {
+    const extension = s3Key.split('.').pop()?.toLowerCase();
 
-  private getContentType(mimeType: string): 'FILE' | 'VIDEO' {
-    const videoMimeTypes = /^video\/(mp4|mpeg|quicktime|x-msvideo|webm)$/;
-    const fileMimeTypes = [
-      /^application\/pdf$/,
-      /^application\/msword$/,
-      /^application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document$/,
-      /^application\/vnd\.ms-excel$/,
-      /^application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet$/,
-    ];
-    if (videoMimeTypes.test(mimeType)) {
+    const videoExtensions = ['mp4', 'mpeg', 'mov', 'avi', 'webm'];
+    const fileExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx'];
+
+    if (videoExtensions.includes(extension || '')) {
       return 'VIDEO';
     }
 
-    if (fileMimeTypes.some((pattern) => pattern.test(mimeType))) {
+    if (fileExtensions.includes(extension || '')) {
       return 'FILE';
     }
+
     throw new BadRequestException(
-      `نوع ملف غير مدعوم: ${mimeType}. يُسمح فقط بملفات الفيديو وأنواع ملفات محددة.`,
+      `نوع ملف غير مدعوم بناءً على الامتداد: ${extension}`,
     );
   }
+  private async getVideoDurationFromS3(s3Key: string): Promise<number> {
 
-  private async getVideoDuration(file: Express.Multer.File): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const readableStream = Readable.from(file.buffer);
-      ffmpeg(readableStream).ffprobe((err, data) => {
-        if (err) {
-          reject(new BadRequestException('لا يمكن الحصول على مدة الفيديو.'));
-        }
-        resolve(Number(data.format.duration.toFixed(2)));
-      });
-    });
-  }
+    try {
+      const stream = await this.s3Service.getFileStream(s3Key);
 
-  uploadLectureFiles(path: string, files: Express.Multer.File[]) {
-    return Promise.all(
-      files.map(async (file) => {
-        const contentType = this.getContentType(file.mimetype);
-        const { url: contentUrl } = await this.s3Service.uploadSingleFile({
-          file,
-          isPublic: true,
-          folder: path,
+      return new Promise((resolve, reject) => {
+        ffmpeg(stream).ffprobe((err, data) => {
+          if (err) {
+            reject(new BadRequestException('لا يمكن الحصول على مدة الفيديو.'));
+          } else {
+            resolve(Number(data.format.duration.toFixed(2)));
+          }
         });
-        if (contentType === 'VIDEO') {
-          const duration = await this.getVideoDuration(file);
-          return {
-            contentUrl,
-            contentType,
-            duration,
-          };
-        }
+      });
+    } catch {
 
-        return {
-          contentUrl,
-          contentType,
-          duration: null,
-        };
-      }),
-    );
+      throw new BadRequestException('فشل في قراءة الملف من S3.');
+    }
   }
 }

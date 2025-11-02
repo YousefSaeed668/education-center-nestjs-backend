@@ -17,5 +17,16 @@
     "noImplicitAny": false,
     "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false
-  }
+  },
+  "exclude": [
+    "node_modules",
+    ".next",
+    "out",
+    "dist",
+    "build",
+    ".cache",
+    ".vscode",
+    "**/node_modules/**",
+    "**/.next/**"
+  ]
 }

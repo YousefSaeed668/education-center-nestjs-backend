@@ -10,14 +10,14 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Role } from '@prisma/client';
+import { GetFinancialStatisticsDto } from 'src/admin/dto/get-financial-statistics.dto';
+import { Public } from 'src/auth/decorators/public.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
+import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
+import { GetTeachersDto } from './dto/get-teachers.dto';
 import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 import { TeacherService } from './teacher.service';
-import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
-import { GetFinancialStatisticsDto } from 'src/admin/dto/get-financial-statistics.dto';
-import { GetTeachersDto } from './dto/get-teachers.dto';
-import { Public } from 'src/auth/decorators/public.decorator';
 
 @Controller('teacher')
 export class TeacherController {
@@ -60,5 +60,11 @@ export class TeacherController {
       query.startDate,
       query.endDate,
     );
+  }
+
+  @Roles(Role.TEACHER)
+  @Get('get-teacher-classes')
+  getTeacherClasses(@Req() req) {
+    return this.teacherService.getTeacherClasses(req.user.id);
   }
 }

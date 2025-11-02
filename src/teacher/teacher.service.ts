@@ -1,21 +1,21 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
+import { Prisma, TransactionType, WithdrawUserType } from '@prisma/client';
+import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
 import { PrismaService } from 'src/prisma.service';
 import { S3Service } from 'src/s3/s3.service';
-import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
-import { UserService } from 'src/user/user.service';
-import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
-import { Prisma, TransactionType, WithdrawUserType } from '@prisma/client';
 import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
+import { UserService } from 'src/user/user.service';
 import {
   GetTeachersDto,
+  SortOrder,
   TeacherQueryResult,
   TeacherSortBy,
-  SortOrder,
 } from './dto/get-teachers.dto';
+import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 
 @Injectable()
 export class TeacherService {
@@ -24,6 +24,7 @@ export class TeacherService {
     private readonly prisma: PrismaService,
     private readonly userService: UserService,
   ) {}
+
   async updateProfile(
     teacherId: number,
     body: UpdateTeacherProfileDto,
@@ -293,6 +294,34 @@ export class TeacherService {
       totalPages,
       pageNumber,
       pageSize: limit,
+    };
+  }
+
+  async getTeacherClasses(userId: number) {
+    const teacherClasses = await this.prisma.teacher.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        division: {
+          select: {
+            name: true,
+            id: true,
+            gradeId: true,
+          },
+        },
+        grade: {
+          select: {
+            name: true,
+            id: true,
+          },
+        },
+      },
+    });
+
+    return {
+      divisions: teacherClasses?.division,
+      grades: teacherClasses?.grade,
     };
   }
 }

@@ -19,12 +19,7 @@ export class CartController {
   constructor(private readonly cartService: CartService) {}
   @Get('get')
   async getCart(@Req() req) {
-    const cartData = await this.cartService.getCart(req.user.id);
-    return {
-      data: cartData,
-      message: 'تم جلب عربة التسوق بنجاح',
-      status: 200,
-    };
+    return await this.cartService.getCart(req.user.id);
   }
   @Post('add/:itemId/:productType')
   addToCart(@Param() param: CartParamsDto, @Req() req) {

@@ -7,12 +7,12 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
-  IsNumber,
   IsPhoneNumber,
   IsString,
   IsStrongPassword,
   Matches,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -46,6 +46,7 @@ export class CreateUserDto {
 
 export class CreateTeacherDto extends CreateUserDto {
   @IsInt({ message: 'معرف المادة يجب أن يكون رقم صحيح' })
+  @Min(1, { message: 'معرف المادة يجب أن يكون 1 على الأقل' })
   @IsNotEmpty({ message: 'معرف المادة مطلوب' })
   @Type(() => Number)
   subjectId: number;
@@ -54,6 +55,7 @@ export class CreateTeacherDto extends CreateUserDto {
   @ArrayNotEmpty({ message: 'يجب اختيار شعبة واحدة على الأقل' })
   @ArrayMinSize(1, { message: 'اختر شعبة واحدة على الأقل' })
   @IsInt({ each: true, message: 'كل معرف صف يجب أن يكون رقم صحيح' })
+  @Min(1, { each: true, message: 'كل معرف شعبة يجب أن يكون 1 على الأقل' })
   @Type(() => Number)
   divisionIds: number[];
 
@@ -61,39 +63,48 @@ export class CreateTeacherDto extends CreateUserDto {
   @ArrayNotEmpty({ message: 'يجب اختيار صف واحد على الأقل' })
   @ArrayMinSize(1, { message: 'اختر صف واحد على الأقل' })
   @IsInt({ each: true, message: 'كل معرف صف يجب أن يكون رقم صحيح' })
+  @Min(1, { each: true, message: 'كل معرف صف يجب أن يكون 1 على الأقل' })
   @Type(() => Number)
   gradeIds: number[];
 
   @IsInt()
+  @Min(1, { message: 'معرف نوع التعليم يجب أن يكون 1 على الأقل' })
   @Type(() => Number)
   educationTypeId: number;
 }
 
 export class CreateStudentDto extends CreateUserDto {
   @IsInt()
+  @Min(1, { message: 'معرف المحافظة يجب أن يكون 1 على الأقل' })
   @IsNotEmpty()
   governmentId: number;
 
   @IsInt()
+  @Min(1, { message: 'معرف المدينة يجب أن يكون 1 على الأقل' })
   @IsNotEmpty()
   cityId: number;
 
-  @IsNumber()
+  @IsInt()
+  @Min(1, { message: 'معرف نوع التعليم يجب أن يكون 1 على الأقل' })
   educationTypeId: number;
 
   @IsInt()
+  @Min(1, { message: 'معرف اللغة الثانية يجب أن يكون 1 على الأقل' })
   secondLangId: number;
 
   @IsInt()
+  @Min(1, { message: 'معرف نوع المدرسة يجب أن يكون 1 على الأقل' })
   schoolTypeId: number;
 
   @IsPhoneNumber('EG')
   parentPhoneNumber: string;
 
   @IsInt()
+  @Min(1, { message: 'معرف الصف يجب أن يكون 1 على الأقل' })
   gradeId: number;
 
   @IsInt()
+  @Min(1, { message: 'معرف الشعبة يجب أن يكون 1 على الأقل' })
   divisionId: number;
 
   @IsString()

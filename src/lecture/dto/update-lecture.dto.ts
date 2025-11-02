@@ -1,12 +1,14 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsArray,
+  IsInt,
+  IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
-  IsInt,
-  ValidateNested,
-  IsArray,
-  IsNumber,
   Min,
+  ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 
 class UpdateLectureContentDto {
@@ -22,6 +24,7 @@ class UpdateLectureContentDto {
   id?: number;
 
   @IsString()
+  @IsNotEmpty({ message: 'اسم المحتوى مطلوب' })
   contentName: string;
 
   @Transform(({ value }) => {
@@ -34,6 +37,11 @@ class UpdateLectureContentDto {
   @IsNumber()
   @Min(0)
   orderIndex: number;
+
+  @ValidateIf((o) => !o.id)
+  @IsString()
+  @IsNotEmpty({ message: 'مفتاح S3 مطلوب للمحتوى الجديد' })
+  s3Key: string;
 }
 
 export class UpdateLectureDto {
@@ -43,13 +51,29 @@ export class UpdateLectureDto {
 
   @IsOptional()
   @IsInt()
+  @Min(1)
   @Transform(({ value }) => parseInt(value))
   gradeId?: number;
 
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    if (Array.isArray(value)) {
+      return value.map((v: any) => parseInt(v));
+    }
+    return value;
+  })
   @IsOptional()
-  @IsInt()
-  @Transform(({ value }) => parseInt(value))
-  divisionId?: number;
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Type(() => Number)
+  divisionIds?: number[];
 
   @Transform(({ value }) => {
     if (typeof value === 'string') {

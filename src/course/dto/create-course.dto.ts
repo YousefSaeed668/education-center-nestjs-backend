@@ -71,11 +71,16 @@ export class CreateCourseDto {
 
   @Transform(({ value }) => parseInt(value))
   @IsInt()
+  @Min(1)
   gradeId: number;
 
-  @Transform(({ value }) => parseInt(value))
-  @IsInt()
-  divisionId: number;
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Transform(({ value }) => {
+    return Array.isArray(value) ? value.map((v: any) => parseInt(v)) : [];
+  })
+  divisionIds: number[];
 
   @Transform(({ value }) => {
     if (Array.isArray(value)) {

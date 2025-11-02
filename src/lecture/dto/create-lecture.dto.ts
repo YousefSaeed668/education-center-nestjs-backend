@@ -2,10 +2,13 @@ import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsBoolean,
+  IsInt,
+  IsNotEmpty,
   IsNumber,
   IsString,
   MaxLength,
   Min,
+  MinLength,
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
@@ -22,46 +25,71 @@ class LectureContentDto {
     return typeof value === 'number' ? value : parseInt(value);
   })
   @IsNumber()
-  @Min(1)
+  @Min(0)
   orderIndex: number;
+
+  @IsString()
+  @IsNotEmpty({ message: 'مفتاح S3 مطلوب لكل محتوى محاضرة' })
+  s3Key: string;
 }
 
 export class CreateLectureDto {
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return Boolean(value);
+  })
   @IsBoolean()
-  @Transform(({ value }) => value === 'true')
   isSellable: boolean;
 
   @ValidateIf((o) => o.isSellable === true)
-  @IsNumber()
   @Transform(({ value }) => parseFloat(value))
+  @IsNumber()
   @Min(0)
   price: number;
 
   @ValidateIf((o) => o.isSellable === true)
-  @IsNumber()
-  @Min(1)
-  subjectId: number;
-
-  @ValidateIf((o) => o.isSellable === true)
-  @IsNumber()
   @Transform(({ value }) => parseInt(value))
-  @Min(1)
+  @IsNumber()
+  @Min(0, { message: 'يجب أن يكون ترتيب المحتوى 0 أو أكثر' })
   orderIndex: number;
 
   @ValidateIf((o) => o.isSellable === true)
   @IsString()
-  @MaxLength(500)
+  @MaxLength(500, { message: 'وصف المحاضرة يجب أن لا يتجاوز 500 حرف' })
   description: string;
 
   @IsNumber()
   @Transform(({ value }) => parseInt(value))
+  @Min(1)
   gradeId: number;
 
-  @IsNumber()
-  @Transform(({ value }) => parseInt(value))
-  divisionId: number;
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    if (Array.isArray(value)) {
+      return value.map((v: any) => parseInt(v));
+    }
+    return value;
+  })
+  divisionIds: number[];
 
   @IsString()
+  @MinLength(10, {
+    message: 'اسم المحاضرة يجب أن يكون 10 أحرف على الأقل',
+  })
+  @MaxLength(150, {
+    message: 'اسم المحاضرة يجب أن لا يتجاوز 150 حرف',
+  })
   lectureName: string;
 
   @Transform(({ value }) => {
@@ -77,6 +105,9 @@ export class CreateLectureDto {
   @Type(() => LectureContentDto)
   @ValidateNested({ each: true })
   @IsArray()
+  @MaxLength(10, {
+    message: 'يجب ألا تتجاوز محتويات المحاضرة 10 عناصر',
+  })
   lectureContents: LectureContentDto[];
 
   @ValidateIf((o) => o.isSellable === true)
