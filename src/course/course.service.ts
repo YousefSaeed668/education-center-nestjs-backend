@@ -544,7 +544,9 @@ FROM course_base cb
   LEFT JOIN teacher_stats ts ON cb.course_id = cs.course_id
   LEFT JOIN lectures_complete lc ON cb.course_id = lc."courseId";
 `;
-
+    if (course.length === 0) {
+      throw new NotFoundException('الدورة غير موجودة');
+    }
     return course[0];
   }
   async getRelatedCourses(id: number) {

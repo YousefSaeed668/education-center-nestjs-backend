@@ -282,6 +282,7 @@ export class LectureService {
         updateLectureDto.deletedContentIds.length > 0
       ) {
         const contentToDelete = await prisma.lectureContent.findMany({
+          select: { contentUrl: true },
           where: {
             id: { in: updateLectureDto.deletedContentIds },
             lectureId: lectureId,
@@ -511,7 +512,6 @@ export class LectureService {
     );
   }
   private async getVideoDurationFromS3(s3Key: string): Promise<number> {
-
     try {
       const stream = await this.s3Service.getFileStream(s3Key);
 
@@ -525,8 +525,51 @@ export class LectureService {
         });
       });
     } catch {
-
       throw new BadRequestException('فشل في قراءة الملف من S3.');
     }
+  }
+  async getLectureDataForUpdate(teacherId: number, lectureId: number) {
+    const lecture = await this.prisma.lecture.findUnique({
+      where: {
+        id: lectureId,
+        teacherId,
+      },
+      select: {
+        lectureName: true,
+        Division: {
+          select: {
+            id: true,
+          },
+        },
+        gradeId: true,
+        LectureContent: {
+          select: {
+            contentName: true,
+            id: true,
+            orderIndex: true,
+            contentType: true,
+          },
+        },
+      },
+    });
+    if (!lecture) {
+      throw new NotFoundException(
+        'المحاضرة غير موجودة أو ليس لديك صلاحية للوصول إليها',
+      );
+    }
+    const {
+      lectureName,
+      Division: divisionIds,
+      gradeId,
+      LectureContent: lectureContents,
+    } = lecture;
+    return {
+      lectureName,
+      divisionIds: divisionIds.map((div) => div.id),
+      gradeId,
+      lectureContents: lectureContents.sort(
+        (a, b) => a.orderIndex - b.orderIndex,
+      ),
+    };
   }
 }

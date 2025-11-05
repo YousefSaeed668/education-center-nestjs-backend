@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   Param,
   ParseIntPipe,
   Post,
@@ -41,9 +42,9 @@ export class LectureController {
         allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
       }),
     )
-    file?: Express.Multer.File,
+    thumbnail?: Express.Multer.File,
   ) {
-    return this.lectureService.createLecture(req.user.id, body, file);
+    return this.lectureService.createLecture(req.user.id, body, thumbnail);
   }
   @Roles(Role.TEACHER)
   @Post('generate-upload-urls-for-update/:lectureId')
@@ -77,5 +78,13 @@ export class LectureController {
   @Delete(':lectureId')
   deleteLecture(@Req() req, @Param('lectureId') lectureId: number) {
     return this.lectureService.deleteLecture(req.user.id, lectureId);
+  }
+  @Roles(Role.TEACHER)
+  @Get('/update-data/:lectureId')
+  getLectureDataForUpdate(
+    @Req() req,
+    @Param('lectureId', ParseIntPipe) lectureId: number,
+  ) {
+    return this.lectureService.getLectureDataForUpdate(req.user.id, lectureId);
   }
 }

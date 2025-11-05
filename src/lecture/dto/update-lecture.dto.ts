@@ -55,6 +55,7 @@ export class UpdateLectureDto {
   @Transform(({ value }) => parseInt(value))
   gradeId?: number;
 
+  @IsOptional()
   @Transform(({ value }) => {
     if (typeof value === 'string') {
       try {
@@ -68,7 +69,6 @@ export class UpdateLectureDto {
     }
     return value;
   })
-  @IsOptional()
   @IsArray()
   @IsInt({ each: true })
   @Min(1, { each: true })

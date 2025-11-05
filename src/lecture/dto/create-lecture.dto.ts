@@ -1,5 +1,6 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsInt,
@@ -105,7 +106,7 @@ export class CreateLectureDto {
   @Type(() => LectureContentDto)
   @ValidateNested({ each: true })
   @IsArray()
-  @MaxLength(10, {
+  @ArrayMaxSize(10, {
     message: 'يجب ألا تتجاوز محتويات المحاضرة 10 عناصر',
   })
   lectureContents: LectureContentDto[];
