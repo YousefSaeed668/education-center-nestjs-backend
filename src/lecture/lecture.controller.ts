@@ -7,6 +7,7 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   Req,
   UploadedFile,
   UseInterceptors,
@@ -17,6 +18,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { CreateLectureDto } from './dto/create-lecture.dto';
 import { GenerateUploadUrlsDto } from './dto/generate-upload-urls.dto';
+import { GetTeacherLectureDto } from './dto/get-teacher-lecture.dto';
 import { UpdateLectureDto } from './dto/update-lecture.dto';
 import { LectureService } from './lecture.service';
 
@@ -86,5 +88,10 @@ export class LectureController {
     @Param('lectureId', ParseIntPipe) lectureId: number,
   ) {
     return this.lectureService.getLectureDataForUpdate(req.user.id, lectureId);
+  }
+  @Roles(Role.TEACHER)
+  @Get('teacher-lectures')
+  getLecturesForTeacher(@Req() req, @Query() query: GetTeacherLectureDto) {
+    return this.lectureService.getLecturesForTeacher(req.user.id, query);
   }
 }

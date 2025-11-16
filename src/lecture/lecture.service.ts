@@ -13,6 +13,11 @@ import { S3Service } from 'src/s3/s3.service';
 import { v4 as uuidv4 } from 'uuid';
 import { CreateLectureDto } from './dto/create-lecture.dto';
 import { GenerateUploadUrlsDto } from './dto/generate-upload-urls.dto';
+import {
+  GetTeacherLectureDto,
+  LectureFilterBy,
+  LecturesSortBy,
+} from './dto/get-teacher-lecture.dto';
 import { UpdateLectureDto } from './dto/update-lecture.dto';
 ffmpeg.setFfprobePath(ffprobe.path);
 
@@ -570,6 +575,114 @@ export class LectureService {
       lectureContents: lectureContents.sort(
         (a, b) => a.orderIndex - b.orderIndex,
       ),
+    };
+  }
+
+  async getLecturesForTeacher(teacherId: number, query: GetTeacherLectureDto) {
+    const { sortBy, sortOrder, pageNumber, pageSize, filterBy, q } = query;
+
+    const skip =
+      pageNumber && pageSize ? (pageNumber - 1) * pageSize : undefined;
+    const take = pageSize ? pageSize : 20;
+    let orderBy: any = {};
+    const whereClause: any = {
+      teacherId,
+    };
+    if (q) {
+      whereClause.lectureName = {
+        contains: q,
+        mode: 'insensitive',
+      };
+    }
+    if (sortBy) {
+      const order = sortOrder ? sortOrder.toLowerCase() : 'desc';
+
+      switch (sortBy) {
+        case LecturesSortBy.CREATED_AT:
+          orderBy = { createdAt: order };
+          break;
+        case LecturesSortBy.LECTURE_NAME:
+          orderBy = { lectureName: order };
+          break;
+        case LecturesSortBy.COURSE_LECTURE:
+          orderBy = { CourseLecture: { _count: order } };
+          break;
+        case LecturesSortBy.LECTURE_CONTENT:
+          orderBy = { LectureContent: { _count: order } };
+          break;
+        case LecturesSortBy.QUIZ:
+          orderBy = { Quiz: { _count: order } };
+          break;
+      }
+    } else {
+      orderBy = { createdAt: 'desc' };
+    }
+    switch (filterBy) {
+      case LectureFilterBy.HAS_CONTENT:
+        whereClause.LectureContent = { some: {} };
+        break;
+      case LectureFilterBy.NO_CONTENT:
+        whereClause.LectureContent = { none: {} };
+        break;
+      case LectureFilterBy.HAS_QUIZ:
+        whereClause.Quiz = { some: {} };
+        break;
+      case LectureFilterBy.NO_QUIZ:
+        whereClause.Quiz = { none: {} };
+        break;
+      case LectureFilterBy.USED_IN_COURSES:
+        whereClause.CourseLecture = { some: {} };
+        break;
+      case LectureFilterBy.NOT_USED_IN_COURSES:
+        whereClause.CourseLecture = { none: {} };
+        break;
+      case LectureFilterBy.ALL:
+      default:
+        break;
+    }
+    const [lectures, total] = await Promise.all([
+      this.prisma.lecture.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          createdAt: true,
+          lectureName: true,
+          _count: {
+            select: {
+              LectureContent: true,
+              CourseLecture: true,
+              Quiz: true,
+            },
+          },
+          Grade: {
+            select: {
+              name: true,
+              id: true,
+            },
+          },
+          Division: {
+            select: {
+              name: true,
+              id: true,
+            },
+          },
+        },
+        orderBy,
+        skip,
+        take,
+      }),
+      this.prisma.lecture.count({
+        where: whereClause,
+      }),
+    ]);
+
+    const totalPages = Math.ceil(total / (pageSize || 20));
+    return {
+      lectures,
+      total,
+      totalPages,
+      pageNumber,
+      pageSize: pageSize || 20,
     };
   }
 }
