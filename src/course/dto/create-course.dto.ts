@@ -40,10 +40,6 @@ export class CreateCourseDto {
   @IsString()
   courseName: string;
 
-  @IsInt()
-  @Min(1, { each: true })
-  @Transform(({ value }) => parseInt(value))
-  subjectId: number;
   @IsArray()
   @IsInt({ each: true })
   @Min(1, { each: true })

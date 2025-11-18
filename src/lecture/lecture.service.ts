@@ -14,10 +14,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { CreateLectureDto } from './dto/create-lecture.dto';
 import { GenerateUploadUrlsDto } from './dto/generate-upload-urls.dto';
 import {
-  GetTeacherLectureDto,
-  LectureFilterBy,
+  GetTeacherLecturesDto,
   LecturesSortBy,
-} from './dto/get-teacher-lecture.dto';
+} from './dto/get-teacher-lectures.dto';
 import { UpdateLectureDto } from './dto/update-lecture.dto';
 ffmpeg.setFfprobePath(ffprobe.path);
 
@@ -578,22 +577,42 @@ export class LectureService {
     };
   }
 
-  async getLecturesForTeacher(teacherId: number, query: GetTeacherLectureDto) {
-    const { sortBy, sortOrder, pageNumber, pageSize, filterBy, q } = query;
+  async getLecturesForTeacher(teacherId: number, query: GetTeacherLecturesDto) {
+    const {
+      sortBy,
+      sortOrder,
+      pageNumber,
+      pageSize,
+      q,
+      hasQuiz,
+      usedInCourses,
+    } = query;
 
     const skip =
       pageNumber && pageSize ? (pageNumber - 1) * pageSize : undefined;
     const take = pageSize ? pageSize : 20;
     let orderBy: any = {};
+
     const whereClause: any = {
       teacherId,
     };
+
     if (q) {
       whereClause.lectureName = {
         contains: q,
         mode: 'insensitive',
       };
     }
+
+    if (hasQuiz !== undefined) {
+      whereClause.Quiz = hasQuiz === 'true' ? { some: {} } : { none: {} };
+    }
+
+    if (usedInCourses !== undefined) {
+      whereClause.CourseLecture =
+        usedInCourses === 'true' ? { some: {} } : { none: {} };
+    }
+
     if (sortBy) {
       const order = sortOrder ? sortOrder.toLowerCase() : 'desc';
 
@@ -617,29 +636,7 @@ export class LectureService {
     } else {
       orderBy = { createdAt: 'desc' };
     }
-    switch (filterBy) {
-      case LectureFilterBy.HAS_CONTENT:
-        whereClause.LectureContent = { some: {} };
-        break;
-      case LectureFilterBy.NO_CONTENT:
-        whereClause.LectureContent = { none: {} };
-        break;
-      case LectureFilterBy.HAS_QUIZ:
-        whereClause.Quiz = { some: {} };
-        break;
-      case LectureFilterBy.NO_QUIZ:
-        whereClause.Quiz = { none: {} };
-        break;
-      case LectureFilterBy.USED_IN_COURSES:
-        whereClause.CourseLecture = { some: {} };
-        break;
-      case LectureFilterBy.NOT_USED_IN_COURSES:
-        whereClause.CourseLecture = { none: {} };
-        break;
-      case LectureFilterBy.ALL:
-      default:
-        break;
-    }
+
     const [lectures, total] = await Promise.all([
       this.prisma.lecture.findMany({
         where: whereClause,

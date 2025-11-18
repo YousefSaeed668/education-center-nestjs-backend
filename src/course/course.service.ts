@@ -18,6 +18,12 @@ import {
   GetCoursesDto,
   SortOrder,
 } from './dto/get-courses.dto';
+import {
+  GetTeacherCoursesDto,
+  TeacherCourseQueryResult,
+  TeacherCourseSortBy,
+  SortOrder as TeacherSortOrder,
+} from './dto/get-teacher-courses.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 ffmpeg.setFfprobePath(ffprobe.path);
 @Injectable()
@@ -28,7 +34,41 @@ export class CourseService {
     private readonly imageService: ImageService,
     private readonly handleFiles: HandleFiles,
   ) {}
-
+  async getCourseDataForUpdate(teacherId: number, courseId: number) {
+    const course = await this.prisma.course.findUnique({
+      where: {
+        id: courseId,
+        teacherId,
+      },
+      select: {
+        courseName: true,
+        price: true,
+        CourseLecture: {
+          select: {
+            lectureId: true,
+          },
+        },
+        expiresAt: true,
+        description: true,
+        courseType: true,
+        gradeId: true,
+        Division: true,
+        courseFeatures: true,
+        thumbnail: true,
+      },
+    });
+    if (!course) {
+      throw new NotFoundException(
+        'الدورة غير موجودة أو ليس لديك صلاحية للوصول إليها',
+      );
+    }
+    const { Division, ...restCourse } = course;
+    return {
+      ...restCourse,
+      lectureIds: course.CourseLecture.map((cl) => cl.lectureId),
+      divisionIds: course.Division.map((d) => d.id),
+    };
+  }
   async createCourse(
     teacherId: number,
     body: CreateCourseDto,
@@ -37,14 +77,13 @@ export class CourseService {
     const { lectureIds, divisionIds, ...rest } = body;
 
     return await this.prisma.$transaction(async (prisma) => {
-      const existingSubject = await prisma.subject.findUnique({
-        where: { id: body.subjectId },
+      const teacher = await prisma.teacher.findUnique({
+        where: { id: teacherId },
+        select: { subjectId: true },
       });
 
-      if (!existingSubject) {
-        throw new NotFoundException(
-          `المادة بالمعرف ${body.subjectId} غير موجودة`,
-        );
+      if (!teacher || !teacher.subjectId) {
+        throw new NotFoundException('المعلم غير موجود أو لا يحتوي على مادة');
       }
 
       const existingLectures = await prisma.lecture.findMany({
@@ -78,6 +117,7 @@ export class CourseService {
         data: {
           ...rest,
           teacherId: teacherId,
+          subjectId: teacher.subjectId,
           thumbnail: url,
           Division: {
             connect: divisionIds.map((id) => ({ id })),
@@ -93,7 +133,9 @@ export class CourseService {
         })),
       });
 
-      return course;
+      return {
+        courseId: course.id,
+      };
     });
   }
 
@@ -136,19 +178,8 @@ export class CourseService {
     updateCourseDto: UpdateCourseDto,
     thumbnail?: Express.Multer.File,
   ) {
+    console.log(updateCourseDto.divisionIds);
     return await this.prisma.$transaction(async (prisma) => {
-      if (updateCourseDto.subjectId) {
-        const existingSubject = await prisma.subject.findUnique({
-          where: { id: updateCourseDto.subjectId },
-        });
-
-        if (!existingSubject) {
-          throw new NotFoundException(
-            `المادة بالمعرف ${updateCourseDto.subjectId} غير موجودة`,
-          );
-        }
-      }
-
       const existingCourse = await prisma.course.findFirst({
         where: {
           id: courseId,
@@ -275,7 +306,9 @@ export class CourseService {
         Prisma.sql`c."courseName" ILIKE ${'%' + q.trim() + '%'}`,
       );
     if (courseType !== undefined)
-      whereConditions.push(Prisma.sql`c."courseType" = ${courseType}`);
+      whereConditions.push(
+        Prisma.sql`c."courseType"::"text" = ${courseType}::"text"`,
+      );
 
     if (minPrice !== undefined)
       whereConditions.push(Prisma.sql`c.price >= ${minPrice}`);
@@ -685,7 +718,201 @@ FROM course_base cb
       return relatedCourses;
     } catch (error) {
       console.log(error);
-      throw error; // Re-throw the error so it can be handled by the calling code
+      throw error;
     }
+  }
+
+  async getCoursesForTeacher(teacherId: number, query: GetTeacherCoursesDto) {
+    const {
+      sortBy = TeacherCourseSortBy.CREATED_AT,
+      sortOrder = TeacherSortOrder.DESC,
+      pageNumber = 1,
+      pageSize = 20,
+      q,
+      minStudents,
+      maxStudents,
+      minPrice,
+      maxPrice,
+      minRating,
+      maxRating,
+      courseType,
+    } = query;
+
+    const offset = (pageNumber - 1) * pageSize;
+
+    const whereConditions: Prisma.Sql[] = [
+      Prisma.sql`c."teacherId" = ${teacherId}`,
+    ];
+
+    if (q?.trim()) {
+      whereConditions.push(
+        Prisma.sql`c."courseName" ILIKE ${'%' + q.trim() + '%'}`,
+      );
+    }
+
+    if (courseType !== undefined) {
+      whereConditions.push(
+        Prisma.sql`c."courseType"::"text" = ${courseType}::"text"`,
+      );
+    }
+
+    if (minPrice !== undefined) {
+      whereConditions.push(Prisma.sql`c.price >= ${minPrice}`);
+    }
+
+    if (maxPrice !== undefined) {
+      whereConditions.push(Prisma.sql`c.price <= ${maxPrice}`);
+    }
+
+    const finalWhereClause = Prisma.sql`WHERE ${Prisma.join(whereConditions, ' AND ')}`;
+
+    const havingConditions: Prisma.Sql[] = [];
+
+    if (minStudents !== undefined) {
+      havingConditions.push(Prisma.sql`student_count >= ${minStudents}`);
+    }
+
+    if (maxStudents !== undefined) {
+      havingConditions.push(Prisma.sql`student_count <= ${maxStudents}`);
+    }
+
+    if (minRating !== undefined) {
+      havingConditions.push(Prisma.sql`avg_rating >= ${minRating}`);
+    }
+
+    if (maxRating !== undefined) {
+      havingConditions.push(Prisma.sql`avg_rating <= ${maxRating}`);
+    }
+
+    const finalHavingClause =
+      havingConditions.length > 0
+        ? Prisma.sql`WHERE ${Prisma.join(havingConditions, ' AND ')}`
+        : Prisma.sql``;
+
+    let orderByClause: Prisma.Sql;
+    const order =
+      sortOrder === TeacherSortOrder.ASC ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+
+    switch (sortBy) {
+      case TeacherCourseSortBy.COURSE_NAME:
+        orderByClause = Prisma.sql`fc."courseName" ${order}`;
+        break;
+      case TeacherCourseSortBy.PRICE:
+        orderByClause = Prisma.sql`fc.price ${order}`;
+        break;
+      case TeacherCourseSortBy.NUMBER_OF_STUDENTS:
+        orderByClause = Prisma.sql`fc.student_count ${order}`;
+        break;
+      case TeacherCourseSortBy.NUMBER_OF_LECTURES:
+        orderByClause = Prisma.sql`fc.lecture_count ${order}`;
+        break;
+      case TeacherCourseSortBy.AVG_RATING:
+        orderByClause = Prisma.sql`fc.avg_rating ${order}`;
+        break;
+      case TeacherCourseSortBy.CREATED_AT:
+      default:
+        orderByClause = Prisma.sql`fc."createdAt" ${order}`;
+        break;
+    }
+
+    const finalOrderByClause = Prisma.sql`ORDER BY ${orderByClause}, fc.id`;
+
+    const result = await this.prisma.$queryRaw<
+      (TeacherCourseQueryResult & { total_count: bigint })[]
+    >`
+      WITH filtered_courses AS (
+        SELECT 
+          c.id,
+          c."courseName",
+          c."courseType",
+          c.price,
+          c."createdAt",
+          g.id as grade_id,
+          g.name as grade_name,
+          COALESCE(student_count.student_count, 0) as student_count,
+          COALESCE(lecture_count.lecture_count, 0) as lecture_count,
+          COALESCE(review_stats.avg_rating, 0) as avg_rating
+        FROM "Course" c
+        INNER JOIN "Grade" g ON c."gradeId" = g.id
+        LEFT JOIN (
+          SELECT 
+            sc."courseId",
+            COUNT(*)::int as student_count
+          FROM "StudentCourse" sc
+          WHERE sc."isActive" = true
+          GROUP BY sc."courseId"
+        ) student_count ON c.id = student_count."courseId"
+        LEFT JOIN (
+          SELECT 
+            cl."courseId",
+            COUNT(*)::int as lecture_count
+          FROM "CourseLecture" cl
+          GROUP BY cl."courseId"
+        ) lecture_count ON c.id = lecture_count."courseId"
+        LEFT JOIN (
+          SELECT 
+            r."courseId",
+            ROUND(AVG(r.rating::numeric), 2)::float as avg_rating
+          FROM "Review" r
+          GROUP BY r."courseId"
+        ) review_stats ON c.id = review_stats."courseId"
+        ${finalWhereClause}
+      ),
+      filtered_with_conditions AS (
+        SELECT * FROM filtered_courses
+        ${finalHavingClause}
+      )
+      SELECT 
+        fc.id,
+        fc."courseName",
+        fc."courseType",
+        fc.price::float as price,
+        fc."createdAt",
+        jsonb_build_object(
+          'id', fc.grade_id,
+          'name', fc.grade_name
+        ) as grade,
+        COALESCE(
+          jsonb_agg(
+            DISTINCT jsonb_build_object('id', d.id, 'name', d.name)
+          ) FILTER (WHERE d.id IS NOT NULL),
+          '[]'::jsonb
+        ) as division,
+        jsonb_build_object(
+          'Students', fc.student_count,
+          'Lectures', fc.lecture_count
+        ) as "_count",
+        fc.avg_rating::float as "avgRating",
+        COUNT(*) OVER() as "total_count"
+      FROM filtered_with_conditions fc
+      LEFT JOIN "_CourseToDivision" cd ON fc.id = cd."A"
+      LEFT JOIN "Division" d ON cd."B" = d.id
+      GROUP BY 
+        fc.id, 
+        fc."courseName", 
+        fc."courseType", 
+        fc.price, 
+        fc."createdAt",
+        fc.grade_id,
+        fc.grade_name,
+        fc.student_count,
+        fc.lecture_count,
+        fc.avg_rating
+      ${finalOrderByClause}
+      LIMIT ${pageSize} OFFSET ${offset}
+    `;
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const courses = result.map(({ total_count, ...course }) => course);
+    const total = result.length > 0 ? Number(result[0].total_count) : 0;
+    const totalPages = Math.ceil(total / pageSize);
+
+    return {
+      courses,
+      total,
+      totalPages,
+      pageNumber,
+      pageSize,
+    };
   }
 }

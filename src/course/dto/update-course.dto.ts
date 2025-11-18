@@ -9,16 +9,13 @@ import {
   IsString,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 
 export class UpdateCourseDto {
   @IsOptional()
   @IsString()
   courseName?: string;
-  @IsOptional()
-  @Transform(({ value }) => parseInt(value))
-  @IsInt()
-  subjectId?: number;
 
   @IsOptional()
   @IsString()
@@ -42,16 +39,32 @@ export class UpdateCourseDto {
 
   @IsOptional()
   @Transform(({ value }) => {
-    return Array.isArray(value) ? value.map((v: any) => parseInt(v)) : [];
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    if (Array.isArray(value)) {
+      return value.map((v: any) => parseInt(v));
+    }
+    return value;
   })
-  @IsArray()
-  @IsInt({ each: true })
-  @Min(1, { each: true })
+  @IsArray({
+    message: 'يجب ان تكون قائمة المعرفات صحيحة',
+  })
+  @IsInt({ each: true, message: 'يجب ان يكون كل معرف رقم صحيح' })
+  @Min(1, { each: true, message: 'يجب ان يكون كل معرف رقم صحيح اكبر من صفر' })
   divisionIds?: number[];
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  @MaxLength(100, { each: true })
+  @MaxLength(100, {
+    each: true,
+    message: 'يجب ان لا يزيد طول الميزة عن 100 حرف',
+  })
+  @MinLength(3, { each: true, message: 'يجب ان لا يقل طول الميزة عن 3 حروف' })
   courseFeatures?: string[];
 }

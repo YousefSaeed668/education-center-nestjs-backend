@@ -2,11 +2,8 @@ import {
   Body,
   Controller,
   Delete,
-  FileTypeValidator,
   Get,
-  MaxFileSizeValidator,
   Param,
-  ParseFilePipe,
   ParseIntPipe,
   Post,
   Put,
@@ -17,13 +14,14 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Role } from '@prisma/client';
+import { Public } from 'src/auth/decorators/public.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { CourseService } from './course.service';
 import { CreateCourseDto } from './dto/create-course.dto';
-import { UpdateCourseDto } from './dto/update-course.dto';
-import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { GetCoursesDto } from './dto/get-courses.dto';
-import { Public } from 'src/auth/decorators/public.decorator';
+import { GetTeacherCoursesDto } from './dto/get-teacher-courses.dto';
+import { UpdateCourseDto } from './dto/update-course.dto';
 
 @Controller('course')
 export class CourseController {
@@ -33,7 +31,11 @@ export class CourseController {
   getAllCourses(@Query() query: GetCoursesDto) {
     return this.courseService.getCourses(query);
   }
-
+  @Roles(Role.TEACHER)
+  @Get('teacher-courses')
+  getCoursesForTeacher(@Req() req, @Query() query: GetTeacherCoursesDto) {
+    return this.courseService.getCoursesForTeacher(req.user.id, query);
+  }
   @UseInterceptors(FileInterceptor('thumbnail'))
   @Roles(Role.TEACHER)
   @Post('create-course')
@@ -60,12 +62,10 @@ export class CourseController {
     @Param('courseId', ParseIntPipe) courseId: number,
     @Body() updateCourseDto: UpdateCourseDto,
     @UploadedFile(
-      new ParseFilePipe({
-        fileIsRequired: false,
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }),
-          new FileTypeValidator({ fileType: /(jpeg|jpg|png|webp)$/ }),
-        ],
+      new ImageValidationPipe({
+        isRequired: false,
+        maxSize: 5 * 1024 * 1024,
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
       }),
     )
     thumbnail?: Express.Multer.File,
@@ -99,5 +99,13 @@ export class CourseController {
   @Get('relatedCourses/:id')
   getRelatedCourses(@Param('id', ParseIntPipe) id: number) {
     return this.courseService.getRelatedCourses(id);
+  }
+  @Roles(Role.TEACHER)
+  @Get('/update-data/:courseId')
+  getLectureDataForUpdate(
+    @Req() req,
+    @Param('courseId', ParseIntPipe) courseId: number,
+  ) {
+    return this.courseService.getCourseDataForUpdate(req.user.id, courseId);
   }
 }
