@@ -22,6 +22,18 @@ ffmpeg.setFfprobePath(ffprobe.path);
 
 @Injectable()
 export class LectureService {
+  async getLectureNames(id: number, ids: number[]) {
+    const lectures = await this.prisma.lecture.findMany({
+      where: {
+        teacherId: id,
+        id: { in: ids },
+      },
+      select: {
+        lectureName: true,
+      },
+    });
+    return lectures.map((lecture) => lecture.lectureName);
+  }
   constructor(
     private readonly s3Service: S3Service,
     private readonly prisma: PrismaService,

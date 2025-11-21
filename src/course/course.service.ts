@@ -34,41 +34,7 @@ export class CourseService {
     private readonly imageService: ImageService,
     private readonly handleFiles: HandleFiles,
   ) {}
-  async getCourseDataForUpdate(teacherId: number, courseId: number) {
-    const course = await this.prisma.course.findUnique({
-      where: {
-        id: courseId,
-        teacherId,
-      },
-      select: {
-        courseName: true,
-        price: true,
-        CourseLecture: {
-          select: {
-            lectureId: true,
-          },
-        },
-        expiresAt: true,
-        description: true,
-        courseType: true,
-        gradeId: true,
-        Division: true,
-        courseFeatures: true,
-        thumbnail: true,
-      },
-    });
-    if (!course) {
-      throw new NotFoundException(
-        'الدورة غير موجودة أو ليس لديك صلاحية للوصول إليها',
-      );
-    }
-    const { Division, ...restCourse } = course;
-    return {
-      ...restCourse,
-      lectureIds: course.CourseLecture.map((cl) => cl.lectureId),
-      divisionIds: course.Division.map((d) => d.id),
-    };
-  }
+
   async createCourse(
     teacherId: number,
     body: CreateCourseDto,
@@ -200,9 +166,83 @@ export class CourseService {
         );
       }
 
+      if (updateCourseDto.lectureIds && updateCourseDto.lectureIds.length > 0) {
+        const uniqueLectureIds = new Set(updateCourseDto.lectureIds);
+        if (uniqueLectureIds.size !== updateCourseDto.lectureIds.length) {
+          throw new BadRequestException('يوجد تكرار في معرفات المحاضرات');
+        }
+
+        const existingCourseLectures = await prisma.courseLecture.findMany({
+          where: {
+            courseId: courseId,
+          },
+          select: {
+            lectureId: true,
+          },
+        });
+
+        const existingLectureIds = existingCourseLectures.map(
+          (cl) => cl.lectureId,
+        );
+
+        const lecturesToAdd = updateCourseDto.lectureIds.filter(
+          (id) => !existingLectureIds.includes(id),
+        );
+
+        if (lecturesToAdd.length > 0) {
+          const newLectures = await prisma.lecture.findMany({
+            where: {
+              id: { in: lecturesToAdd },
+              teacherId: teacherId,
+            },
+          });
+
+          if (newLectures.length !== lecturesToAdd.length) {
+            throw new NotFoundException(
+              'بعض المحاضرات الجديدة غير موجودة أو لا تنتمي لك',
+            );
+          }
+        }
+
+        const remainingLectureIds = updateCourseDto.lectureIds.filter((id) =>
+          existingLectureIds.includes(id),
+        );
+        if (remainingLectureIds.length > 0) {
+          const remainingLectures = await prisma.lecture.findMany({
+            where: {
+              id: { in: remainingLectureIds },
+              teacherId: teacherId,
+            },
+          });
+
+          if (remainingLectures.length !== remainingLectureIds.length) {
+            throw new NotFoundException(
+              'بعض المحاضرات غير موجودة أو لا تنتمي لك',
+            );
+          }
+        }
+
+        await prisma.courseLecture.deleteMany({
+          where: {
+            courseId: courseId,
+          },
+        });
+
+        await prisma.courseLecture.createMany({
+          data: updateCourseDto.lectureIds.map((lectureId, index) => ({
+            courseId: courseId,
+            lectureId: lectureId,
+            orderIndex: index + 1,
+          })),
+        });
+      }
+
       const filteredData: any = Object.fromEntries(
         Object.entries(updateCourseDto).filter(
-          ([key, value]) => value !== undefined && key !== 'divisionIds',
+          ([key, value]) =>
+            value !== undefined &&
+            key !== 'divisionIds' &&
+            key !== 'lectureIds',
         ),
       );
 
@@ -871,13 +911,13 @@ FROM course_base cb
         jsonb_build_object(
           'id', fc.grade_id,
           'name', fc.grade_name
-        ) as grade,
+        ) as "Grade",
         COALESCE(
           jsonb_agg(
             DISTINCT jsonb_build_object('id', d.id, 'name', d.name)
           ) FILTER (WHERE d.id IS NOT NULL),
           '[]'::jsonb
-        ) as division,
+        ) as "Division",
         jsonb_build_object(
           'Students', fc.student_count,
           'Lectures', fc.lecture_count
@@ -913,6 +953,50 @@ FROM course_base cb
       totalPages,
       pageNumber,
       pageSize,
+    };
+  }
+  async getCourseDataForUpdate(teacherId: number, courseId: number) {
+    const course = await this.prisma.course.findUnique({
+      where: {
+        id: courseId,
+        teacherId,
+      },
+      select: {
+        courseName: true,
+        price: true,
+        CourseLecture: {
+          select: {
+            lectureId: true,
+            lecture: {
+              select: {
+                lectureName: true,
+              },
+            },
+          },
+        },
+        expiresAt: true,
+        description: true,
+        courseType: true,
+        gradeId: true,
+        Division: true,
+        courseFeatures: true,
+        thumbnail: true,
+      },
+    });
+    if (!course) {
+      throw new NotFoundException(
+        'الدورة غير موجودة أو ليس لديك صلاحية للوصول إليها',
+      );
+    }
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { Division, ...restCourse } = course;
+    return {
+      ...restCourse,
+      lectures: course.CourseLecture.map((cl) => ({
+        id: cl.lectureId,
+        lectureName: cl.lecture.lectureName,
+      })),
+      divisionIds: course.Division.map((d) => d.id),
     };
   }
 }

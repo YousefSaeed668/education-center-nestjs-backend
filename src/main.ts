@@ -43,7 +43,6 @@ async function bootstrap() {
       },
     }),
   );
-
   app.useGlobalFilters(new PrismaExceptionFilter(), new AllExceptionsFilter());
   app.useGlobalInterceptors(new ResponseInterceptor());
 

@@ -1,6 +1,7 @@
 ﻿import { CourseType } from '@prisma/client';
 import { Transform } from 'class-transformer';
 import {
+  ArrayMinSize,
   IsArray,
   IsEnum,
   IsInt,
@@ -67,4 +68,34 @@ export class UpdateCourseDto {
   })
   @MinLength(3, { each: true, message: 'يجب ان لا يقل طول الميزة عن 3 حروف' })
   courseFeatures?: string[];
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    if (Array.isArray(value)) {
+      return value.map((v: any) => parseInt(v));
+    }
+    return value;
+  })
+  @IsArray({
+    message: 'يجب ان تكون قائمة معرفات المحاضرات صحيحة',
+  })
+  @ArrayMinSize(1, {
+    message: 'يجب ان تحتوي قائمة المحاضرات على محاضرة واحدة على الأقل',
+  })
+  @IsInt({
+    each: true,
+    message: 'يجب ان يكون كل معرف محاضرة رقم صحيح',
+  })
+  @Min(1, {
+    each: true,
+    message: 'يجب ان يكون كل معرف محاضرة رقم صحيح اكبر من صفر',
+  })
+  lectureIds?: number[];
 }
