@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Query,
   Req,
   UploadedFile,
@@ -31,8 +32,8 @@ export class TeacherController {
   }
 
   @Roles(Role.TEACHER)
-  @Post('update-profile')
-  @UseInterceptors(FileInterceptor('file'))
+  @Put('update-profile')
+  @UseInterceptors(FileInterceptor('profilePicture'))
   updateProfile(
     @Req() req,
     @Body() body: UpdateTeacherProfileDto,
@@ -73,5 +74,11 @@ export class TeacherController {
   @Get('get-teacher-classes')
   getTeacherClasses(@Req() req) {
     return this.teacherService.getTeacherClasses(req.user.id);
+  }
+
+  @Roles(Role.TEACHER)
+  @Get('info-for-update')
+  teacherInfoForUpdate(@Req() req) {
+    return this.teacherService.teacherInfoForUpdate(req.user.id);
   }
 }

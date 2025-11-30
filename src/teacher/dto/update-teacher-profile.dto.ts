@@ -2,6 +2,7 @@ import {
   IsOptional,
   IsPhoneNumber,
   IsString,
+  IsStrongPassword,
   MaxLength,
   MinLength,
   ValidateBy,
@@ -84,4 +85,15 @@ export class UpdateTeacherProfileDto {
   @IsString()
   @IsSocialMediaJSON()
   socialMedia: string;
+
+  @IsStrongPassword({
+    minSymbols: 0,
+  })
+  password: string;
+
+  @IsOptional()
+  gradeIds: number[];
+
+  @IsOptional()
+  divisionIds: number[];
 }

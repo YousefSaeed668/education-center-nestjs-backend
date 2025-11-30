@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Prisma, TransactionType, WithdrawUserType } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
 import { PrismaService } from 'src/prisma.service';
 import { S3Service } from 'src/s3/s3.service';
@@ -57,14 +58,28 @@ export class TeacherService {
         socialMedia: body.socialMedia
           ? JSON.parse(body.socialMedia)
           : undefined,
+        ...(body.gradeIds && {
+          grade: {
+            set: body.gradeIds.map((id) => ({ id: Number(id) })),
+          },
+        }),
+        ...(body.divisionIds && {
+          division: {
+            set: body.divisionIds.map((id) => ({ id: Number(id) })),
+          },
+        }),
       });
+
+      if (body.password) {
+        userData['password'] = await bcrypt.hash(body.password, 10);
+      }
       await this.prisma.$transaction(async (tx) => {
         return await tx.user.update({
           where: { id: teacherId },
           data: {
             ...userData,
             ...(Object.keys(teacherData).length > 0 && {
-              Teacher: {
+              teacher: {
                 update: teacherData,
               },
             }),
@@ -74,6 +89,7 @@ export class TeacherService {
           },
         });
       });
+
       return {
         message: 'تم تحديث الملف الشخصي بنجاح',
       };
@@ -373,6 +389,7 @@ export class TeacherService {
           status: true,
           createdAt: true,
           paymentMethod: true,
+          adminNotes: true,
           accountHolderName: true,
         },
         take,
@@ -386,6 +403,35 @@ export class TeacherService {
       totalPages,
       pageNumber,
       pageSize: take,
+    };
+  }
+  async teacherInfoForUpdate(id: number) {
+    const teacher = await this.prisma.teacher.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        socialMedia: true,
+        division: true,
+        bio: true,
+        user: {
+          select: {
+            displayName: true,
+            profilePicture: true,
+            phoneNumber: true,
+          },
+        },
+        grade: true,
+      },
+    });
+    const [grades, divisions] = await Promise.all([
+      this.prisma.grade.findMany(),
+      this.prisma.division.findMany(),
+    ]);
+    return {
+      teacher,
+      grades,
+      divisions,
     };
   }
 }
