@@ -1,11 +1,12 @@
+import { QuestionType } from '@prisma/client';
 import {
+  registerDecorator,
+  ValidationArguments,
+  ValidationOptions,
   ValidatorConstraint,
   ValidatorConstraintInterface,
-  ValidationArguments,
-  registerDecorator,
-  ValidationOptions,
 } from 'class-validator';
-import { QuestionType } from '@prisma/client';
+import { CreateQuestionDto } from '../create-quiz.dto';
 
 interface QuestionDto {
   type: QuestionType;
@@ -110,6 +111,59 @@ export function ValidateQuestions(validationOptions?: ValidationOptions) {
       options: validationOptions,
       constraints: [],
       validator: ValidQuestionStructureConstraint,
+    });
+  };
+}
+
+@ValidatorConstraint({ name: 'ValidateQuestionOptions', async: false })
+class ValidateQuestionOptionsConstraint
+  implements ValidatorConstraintInterface
+{
+  validate(options: any[], args: ValidationArguments) {
+    const question = args.object as CreateQuestionDto;
+
+    if (!Array.isArray(options)) {
+      return false;
+    }
+
+    const optionsCount = options.length;
+
+    switch (question.type) {
+      case QuestionType.TRUE_FALSE:
+        return optionsCount === 2;
+
+      case QuestionType.MULTIPLE_CHOICE:
+        return optionsCount >= 2 && optionsCount <= 6;
+
+      default:
+        return false;
+    }
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    const question = args.object as CreateQuestionDto;
+
+    switch (question.type) {
+      case QuestionType.TRUE_FALSE:
+        return 'أسئلة صح/خطأ يجب أن تحتوي على خيارين فقط';
+
+      case QuestionType.MULTIPLE_CHOICE:
+        return 'أسئلة الاختيار من متعدد يجب أن تحتوي على 2-6 خيارات';
+
+      default:
+        return 'عدد الخيارات غير صالح';
+    }
+  }
+}
+
+export function ValidateQuestionOptions(validationOptions?: ValidationOptions) {
+  return function (object: object, propertyName: string) {
+    registerDecorator({
+      target: object.constructor,
+      propertyName: propertyName,
+      options: validationOptions,
+      constraints: [],
+      validator: ValidateQuestionOptionsConstraint,
     });
   };
 }

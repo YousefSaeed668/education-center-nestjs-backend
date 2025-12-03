@@ -7,11 +7,14 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   Req,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CreateQuizDto } from './dto/create-quiz.dto';
+import { GetQuizzesDto } from './dto/get-quizzes.dto';
+import { ReorderQuizzesDto } from './dto/reorder-quizzes.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
 import { QuizService } from './quiz.service';
 
@@ -26,6 +29,12 @@ export class QuizController {
   }
 
   @Roles(Role.TEACHER)
+  @Get('all')
+  getQuizzes(@Req() req, @Query() query: GetQuizzesDto) {
+    return this.quizService.getQuizzes(req.user.id, query);
+  }
+
+  @Roles(Role.TEACHER)
   @Put(':quizId')
   updateQuiz(
     @Req() req,
@@ -34,7 +43,11 @@ export class QuizController {
   ) {
     return this.quizService.updateQuiz(req.user.id, quizId, updateQuizDto);
   }
-
+  @Roles(Role.TEACHER)
+  @Put('reorder/lecture')
+  reorderQuizzes(@Req() req, @Body() reorderDto: ReorderQuizzesDto) {
+    return this.quizService.reorderQuizzes(req.user.id, reorderDto);
+  }
   @Roles(Role.TEACHER)
   @Delete(':quizId')
   deleteQuiz(@Req() req, @Param('quizId', ParseIntPipe) quizId: number) {

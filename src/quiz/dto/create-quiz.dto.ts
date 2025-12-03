@@ -1,17 +1,21 @@
+import { QuestionType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  IsString,
-  IsOptional,
-  IsInt,
-  Min,
   IsArray,
-  ValidateNested,
-  IsEnum,
   IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
-import { QuestionType } from '@prisma/client';
-import { ValidateQuestions } from './validators/question-validation';
+import {
+  ValidateQuestionOptions,
+  ValidateQuestions,
+} from './validators/question-validation';
 
 export class CreateQuestionOptionDto {
   @IsString()
@@ -23,6 +27,9 @@ export class CreateQuestionOptionDto {
 
 export class CreateQuestionDto {
   @IsString()
+  @MinLength(8, {
+    message: 'السؤال يجب ان يكون علي الاقل 8 احرف',
+  })
   questionText: string;
 
   @IsEnum(QuestionType)
@@ -35,6 +42,7 @@ export class CreateQuestionDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateQuestionOptionDto)
+  @ValidateQuestionOptions()
   options: CreateQuestionOptionDto[];
 }
 
@@ -47,8 +55,12 @@ export class CreateQuizDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(255, {
+    message: 'وصف الاختبار يجب ان يكون علي الاقل 255 حرف',
+  })
   description?: string;
 
+  @Type(() => Number)
   @IsInt()
   lectureId: number;
 

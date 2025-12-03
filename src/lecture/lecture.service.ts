@@ -416,91 +416,96 @@ export class LectureService {
   }
 
   async deleteLecture(teacherId: number, lectureId: number) {
-    return await this.prisma.$transaction(async (prisma) => {
-      const existingLecture = await prisma.lecture.findFirst({
-        where: {
-          id: lectureId,
-          teacherId,
-        },
-        include: {
-          LectureContent: true,
-          CourseLecture: {
-            include: {
-              course: {
-                include: {
-                  _count: {
-                    select: {
-                      CourseLecture: true,
+    try {
+      return await this.prisma.$transaction(async (prisma) => {
+        const existingLecture = await prisma.lecture.findFirst({
+          where: {
+            id: lectureId,
+            teacherId,
+          },
+          include: {
+            LectureContent: true,
+            CourseLecture: {
+              include: {
+                course: {
+                  include: {
+                    _count: {
+                      select: {
+                        CourseLecture: true,
+                      },
                     },
                   },
                 },
               },
             },
           },
-        },
-      });
+        });
 
-      if (!existingLecture) {
-        throw new NotFoundException(
-          'المحاضرة غير موجودة أو ليس لديك صلاحية لحذفها',
-        );
-      }
+        if (!existingLecture) {
+          throw new NotFoundException(
+            'المحاضرة غير موجودة أو ليس لديك صلاحية لحذفها',
+          );
+        }
 
-      await Promise.all(
-        existingLecture.LectureContent.map(async (content) => {
-          try {
-            await this.s3Service.deleteFileByUrl(content.contentUrl);
-          } catch (error) {
-            console.error(
-              `Failed to delete S3 file: ${content.contentUrl}`,
-              error,
-            );
-          }
-        }),
-      );
-
-      const coursesToDelete = existingLecture.CourseLecture.filter(
-        (courseLecture) => courseLecture.course._count.CourseLecture === 1,
-      ).map((courseLecture) => courseLecture.course);
-
-      if (coursesToDelete.length > 0) {
         await Promise.all(
-          coursesToDelete.map(async (course) => {
+          existingLecture.LectureContent.map(async (content) => {
             try {
-              await this.s3Service.deleteFileByUrl(course.thumbnail);
+              await this.s3Service.deleteFileByUrl(content.contentUrl);
             } catch (error) {
               console.error(
-                `Failed to delete course thumbnail: ${course.thumbnail}`,
+                `Failed to delete S3 file: ${content.contentUrl}`,
                 error,
               );
             }
           }),
         );
 
-        const courseIds = coursesToDelete.map((course) => course.id);
+        const coursesToDelete = existingLecture.CourseLecture.filter(
+          (courseLecture) => courseLecture.course._count.CourseLecture === 1,
+        ).map((courseLecture) => courseLecture.course);
+
+        if (coursesToDelete.length > 0) {
+          await Promise.all(
+            coursesToDelete.map(async (course) => {
+              try {
+                await this.s3Service.deleteFileByUrl(course.thumbnail);
+              } catch (error) {
+                console.error(
+                  `Failed to delete course thumbnail: ${course.thumbnail}`,
+                  error,
+                );
+              }
+            }),
+          );
+
+          const courseIds = coursesToDelete.map((course) => course.id);
+
+          await prisma.course.deleteMany({
+            where: {
+              id: { in: courseIds },
+            },
+          });
+        }
 
         await prisma.courseLecture.deleteMany({
           where: {
-            courseId: { in: courseIds },
+            lectureId: lectureId,
           },
         });
 
-        await prisma.course.deleteMany({
-          where: {
-            id: { in: courseIds },
-          },
+        await prisma.lecture.delete({
+          where: { id: lectureId },
         });
-      }
 
-      await prisma.lecture.delete({
-        where: { id: lectureId },
+        return {
+          success: true,
+          message: 'تم حذف المحاضرة بنجاح',
+        };
       });
-
-      return {
-        success: true,
-        message: 'تم حذف المحاضرة بنجاح',
-      };
-    });
+    } catch (error) {
+      console.log(error);
+      throw error;
+    }
   }
   private sanitizeFolderName(name: string): string {
     return name

@@ -1,16 +1,19 @@
+import { QuestionType } from '@prisma/client';
 import { Type } from 'class-transformer';
 import {
-  IsString,
-  IsOptional,
-  IsInt,
-  Min,
   IsArray,
-  ValidateNested,
-  IsEnum,
   IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+  ValidateNested,
 } from 'class-validator';
-import { QuestionType } from '@prisma/client';
-import { ValidateQuestions } from './validators/question-validation';
+import {
+  ValidateQuestionOptions,
+  ValidateQuestions,
+} from './validators/question-validation';
 
 export class UpdateQuestionOptionDto {
   @IsOptional()
@@ -42,6 +45,7 @@ export class UpdateQuestionDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => UpdateQuestionOptionDto)
+  @ValidateQuestionOptions()
   options: UpdateQuestionOptionDto[];
 }
 
@@ -58,11 +62,6 @@ export class UpdateQuizDto {
   @IsInt()
   @Min(0)
   maxAttempts?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  orderIndex?: number;
 
   @IsOptional()
   @IsArray()
