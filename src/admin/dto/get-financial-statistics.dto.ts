@@ -3,12 +3,12 @@ import { IsDate, IsOptional } from 'class-validator';
 
 export class GetFinancialStatisticsDto {
   @IsOptional()
-  @Type(() => Date)
   @IsDate()
+  @Type(() => Date)
   startDate?: Date;
 
   @IsOptional()
-  @Type(() => Date)
   @IsDate()
+  @Type(() => Date)
   endDate?: Date;
 }

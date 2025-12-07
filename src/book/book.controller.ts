@@ -7,18 +7,20 @@ import {
   ParseIntPipe,
   Post,
   Put,
+  Query,
   Req,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
-import { BookService } from './book.service';
-import { Roles } from 'src/auth/decorators/roles.decorator';
-import { Role } from '@prisma/client';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CreateBookDto } from './dto/create-book-dto';
-import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
-import { UpdateBookDto } from './dto/update-book-dto';
+import { Role } from '@prisma/client';
 import { Public } from 'src/auth/decorators/public.decorator';
+import { Roles } from 'src/auth/decorators/roles.decorator';
+import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
+import { BookService } from './book.service';
+import { CreateBookDto } from './dto/create-book-dto';
+import { GetTeacherBooksDto } from './dto/get-teacher-books.dto';
+import { UpdateBookDto } from './dto/update-book-dto';
 
 @Controller('book')
 export class BookController {
@@ -66,6 +68,16 @@ export class BookController {
   @Delete(':bookId')
   deleteBook(@Req() req, @Param('bookId', ParseIntPipe) bookId: number) {
     return this.bookService.deleteBook(req.user.id, bookId);
+  }
+  @Roles(Role.TEACHER)
+  @Get('teacher-books')
+  getBooksForTeacher(@Req() req, @Query() query: GetTeacherBooksDto) {
+    return this.bookService.getBooksForTeacher(req.user.id, query);
+  }
+  @Roles(Role.TEACHER)
+  @Get('update-data/:bookId')
+  getBookForUpdate(@Req() req, @Param('bookId', ParseIntPipe) bookId: number) {
+    return this.bookService.getBookForUpdate(req.user.id, bookId);
   }
 
   @Roles(Role.TEACHER)

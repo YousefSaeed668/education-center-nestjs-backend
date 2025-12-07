@@ -25,10 +25,13 @@ export class CreateBookDto {
   @Min(1)
   @Transform(({ value }) => parseInt(value, 10))
   gradeId: number;
-  @IsInt()
-  @Min(1)
-  @Transform(({ value }) => parseInt(value, 10))
-  divisionId: number;
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Transform(({ value }) => {
+    return Array.isArray(value) ? value.map((v: any) => parseInt(v)) : [];
+  })
+  divisionIds: number[];
 
   @IsNumber()
   @Min(0, {
@@ -47,7 +50,7 @@ export class CreateBookDto {
         if (Array.isArray(parsed)) {
           return parsed;
         }
-      } catch (error) {
+      } catch {
         throw new BadRequestException(
           'bookFeatures must be a valid JSON array',
         );
@@ -59,5 +62,6 @@ export class CreateBookDto {
   @IsArray()
   @IsString({ each: true })
   @MaxLength(100, { each: true })
+  @MinLength(1, { each: true })
   bookFeatures: string[];
 }

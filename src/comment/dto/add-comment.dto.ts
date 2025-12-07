@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class AddCommentDto {
@@ -6,5 +7,6 @@ export class AddCommentDto {
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Type(() => Number)
   parentCommentId?: number;
 }

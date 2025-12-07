@@ -3,7 +3,12 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, TransactionType, WithdrawUserType } from '@prisma/client';
+import {
+  Prisma,
+  ProductType,
+  TransactionType,
+  WithdrawUserType,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
 import { PrismaService } from 'src/prisma.service';
@@ -154,37 +159,511 @@ export class TeacherService {
 
   async getTeacherEarnings(
     teacherId: number,
-    startDate?: Date,
-    endDate?: Date,
+    startDate?: Date | string,
+    endDate?: Date | string,
   ) {
-    const startDateObj = startDate ? new Date(startDate) : undefined;
-    const endDateObj = endDate ? new Date(endDate) : undefined;
-    const whereClause = {
-      teacherId,
-      transactionType: TransactionType.ORDER,
-      ...(startDate &&
-        endDate && {
-          transactionDate: {
-            gte: startDateObj,
-            lte: endDateObj,
-          },
-        }),
+    const end = endDate ? new Date(endDate) : new Date();
+    const start = startDate
+      ? new Date(startDate)
+      : new Date(new Date().setDate(end.getDate() - 30));
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new BadRequestException('Invalid date parameters');
+    }
+
+    const periodDuration = end.getTime() - start.getTime();
+    const prevStart = new Date(start.getTime() - periodDuration);
+
+    const calculateChange = (current: number, previous: number) => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return Number((((current - previous) / previous) * 100).toFixed(2));
     };
 
-    const earnings = await this.prisma.transaction.aggregate({
-      where: whereClause,
-      _sum: {
-        teacherShare: true,
+    const createCard = (current: number, previous: number) => {
+      const change = calculateChange(current, previous);
+      let changeType: 'increase' | 'decrease' | 'neutral';
+      if (current > previous) {
+        changeType = 'increase';
+      } else if (current < previous) {
+        changeType = 'decrease';
+      } else {
+        changeType = 'neutral';
+      }
+      return {
+        value: Number(current.toFixed(2)),
+        change,
+        changeType,
+      };
+    };
+
+    const daysDiff = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+    const groupBy = daysDiff > 60 ? 'month' : 'day';
+
+    const formatDate = (date: Date) => {
+      if (groupBy === 'month') {
+        return date.toISOString().slice(0, 7);
+      }
+      return date.toISOString().slice(0, 10);
+    };
+
+    const platformSettings = await this.prisma.platformSetting.findFirst();
+    const platformPercentage =
+      platformSettings?.platformPercentage?.toNumber() || 0.1;
+
+    const [
+      currentStudents,
+      currentCourses,
+      currentBooks,
+      currentLectures,
+      currentQuizzes,
+      currentRevenueAgg,
+      currentPendingWithdrawals,
+      currentCompletedWithdrawals,
+      currentEnrollments,
+      currentReviews,
+      currentAvgRating,
+      currentComments,
+      currentPendingComments,
+      currentQuizAttempts,
+
+      prevStudents,
+      prevCourses,
+      prevBooks,
+      prevLectures,
+      prevQuizzes,
+      prevRevenueAgg,
+      prevCompletedWithdrawals,
+      prevEnrollments,
+      prevReviews,
+      prevAvgRating,
+      prevComments,
+      prevPendingComments,
+      prevQuizAttempts,
+
+      transactions,
+      enrollmentsList,
+      reviewsList,
+      commentsList,
+      quizAttemptsList,
+      coursesList,
+    ] = await Promise.all([
+      this.prisma.studentCourse.findMany({
+        where: {
+          course: { teacherId },
+          purchasedAt: { gte: start, lte: end },
+        },
+        distinct: ['studentId'],
+        select: { studentId: true },
+      }),
+      this.prisma.course.count({
+        where: { teacherId, createdAt: { gte: start, lte: end } },
+      }),
+      this.prisma.book.count({
+        where: { teacherId, createdAt: { gte: start, lte: end } },
+      }),
+      this.prisma.lecture.count({
+        where: { teacherId, createdAt: { gte: start, lte: end } },
+      }),
+      this.prisma.quiz.count({
+        where: { teacherId, createdAt: { gte: start, lte: end } },
+      }),
+      this.prisma.transaction.aggregate({
+        where: {
+          teacherId,
+          transactionType: TransactionType.ORDER,
+          transactionDate: { gte: start, lte: end },
+        },
+        _sum: { teacherShare: true },
+      }),
+      this.prisma.withdrawRequest.aggregate({
+        where: { userId: teacherId, status: 'PENDING' },
+        _sum: { amount: true },
+      }),
+      this.prisma.withdrawRequest.aggregate({
+        where: {
+          userId: teacherId,
+          status: 'COMPLETED',
+          createdAt: { gte: start, lte: end },
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.studentCourse.count({
+        where: {
+          course: { teacherId },
+          purchasedAt: { gte: start, lte: end },
+        },
+      }),
+      this.prisma.review.count({
+        where: { course: { teacherId }, createdAt: { gte: start, lte: end } },
+      }),
+      this.prisma.review.aggregate({
+        where: { course: { teacherId }, createdAt: { gte: start, lte: end } },
+        _avg: { rating: true },
+      }),
+      this.prisma.comment.count({
+        where: {
+          course: { teacherId },
+          createdAt: { gte: start, lte: end },
+          teacherId: null,
+        },
+      }),
+      this.prisma.comment.count({
+        where: {
+          course: { teacherId },
+          createdAt: { gte: start, lte: end },
+          parentCommentId: null,
+          replies: { none: {} },
+          teacherId: null,
+        },
+      }),
+      this.prisma.quizAttempt.count({
+        where: { quiz: { teacherId }, startedAt: { gte: start, lte: end } },
+      }),
+
+      this.prisma.studentCourse.findMany({
+        where: {
+          course: { teacherId },
+          purchasedAt: { gte: prevStart, lt: start },
+        },
+        distinct: ['studentId'],
+        select: { studentId: true },
+      }),
+      this.prisma.course.count({
+        where: { teacherId, createdAt: { gte: prevStart, lt: start } },
+      }),
+      this.prisma.book.count({
+        where: { teacherId, createdAt: { gte: prevStart, lt: start } },
+      }),
+      this.prisma.lecture.count({
+        where: { teacherId, createdAt: { gte: prevStart, lt: start } },
+      }),
+      this.prisma.quiz.count({
+        where: { teacherId, createdAt: { gte: prevStart, lt: start } },
+      }),
+      this.prisma.transaction.aggregate({
+        where: {
+          teacherId,
+          transactionType: TransactionType.ORDER,
+          transactionDate: { gte: prevStart, lt: start },
+        },
+        _sum: { teacherShare: true },
+      }),
+      this.prisma.withdrawRequest.aggregate({
+        where: {
+          userId: teacherId,
+          status: 'COMPLETED',
+          createdAt: { gte: prevStart, lt: start },
+        },
+        _sum: { amount: true },
+      }),
+      this.prisma.studentCourse.count({
+        where: {
+          course: { teacherId },
+          purchasedAt: { gte: prevStart, lt: start },
+        },
+      }),
+      this.prisma.review.count({
+        where: {
+          course: { teacherId },
+          createdAt: { gte: prevStart, lt: start },
+        },
+      }),
+      this.prisma.review.aggregate({
+        where: {
+          course: { teacherId },
+          createdAt: { gte: prevStart, lt: start },
+        },
+        _avg: { rating: true },
+      }),
+      this.prisma.comment.count({
+        where: {
+          course: { teacherId },
+          createdAt: { gte: prevStart, lt: start },
+          teacherId: null,
+        },
+      }),
+      this.prisma.comment.count({
+        where: {
+          course: { teacherId },
+          createdAt: { gte: prevStart, lt: start },
+          parentCommentId: null,
+          replies: { none: {} },
+          teacherId: null,
+        },
+      }),
+      this.prisma.quizAttempt.count({
+        where: {
+          quiz: { teacherId },
+          startedAt: { gte: prevStart, lt: start },
+        },
+      }),
+
+      this.prisma.transaction.findMany({
+        where: {
+          teacherId,
+          transactionType: TransactionType.ORDER,
+          transactionDate: { gte: start, lte: end },
+        },
+        include: { orderItem: true },
+      }),
+      this.prisma.studentCourse.findMany({
+        where: {
+          course: { teacherId },
+          purchasedAt: { gte: start, lte: end },
+        },
+        include: { course: { select: { id: true, courseName: true } } },
+      }),
+      this.prisma.review.findMany({
+        where: { course: { teacherId }, createdAt: { gte: start, lte: end } },
+        include: { course: { select: { id: true } } },
+      }),
+      this.prisma.comment.findMany({
+        where: {
+          course: { teacherId },
+          createdAt: { gte: start, lte: end },
+          teacherId: null,
+        },
+        include: { course: { select: { id: true } } },
+      }),
+      this.prisma.quizAttempt.findMany({
+        where: { quiz: { teacherId }, startedAt: { gte: start, lte: end } },
+      }),
+      this.prisma.course.findMany({
+        where: { teacherId },
+        select: { id: true, courseName: true },
+      }),
+    ]);
+
+    const totalRevenueVal =
+      currentRevenueAgg._sum.teacherShare?.toNumber() || 0;
+    const prevTotalRevenueVal =
+      prevRevenueAgg._sum.teacherShare?.toNumber() || 0;
+
+    const myRevenueVal = Number(
+      (totalRevenueVal * (1 - platformPercentage)).toFixed(2),
+    );
+    const prevMyRevenueVal = Number(
+      (prevTotalRevenueVal * (1 - platformPercentage)).toFixed(2),
+    );
+
+    const cards = {
+      students: createCard(currentStudents.length, prevStudents.length),
+      courses: createCard(currentCourses, prevCourses),
+      books: createCard(currentBooks, prevBooks),
+      lectures: createCard(currentLectures, prevLectures),
+      quizzes: createCard(currentQuizzes, prevQuizzes),
+      totalRevenue: createCard(totalRevenueVal, prevTotalRevenueVal),
+      myRevenue: createCard(myRevenueVal, prevMyRevenueVal),
+      pendingWithdrawals: {
+        value: Number(
+          (currentPendingWithdrawals._sum.amount?.toNumber() || 0).toFixed(2),
+        ),
+        change: 0,
+        changeType: 'neutral',
       },
+      totalWithdrawals: createCard(
+        currentCompletedWithdrawals._sum.amount?.toNumber() || 0,
+        prevCompletedWithdrawals._sum.amount?.toNumber() || 0,
+      ),
+      enrollments: createCard(currentEnrollments, prevEnrollments),
+      reviews: createCard(currentReviews, prevReviews),
+      avgRating: createCard(
+        currentAvgRating._avg.rating || 0,
+        prevAvgRating._avg.rating || 0,
+      ),
+      comments: createCard(currentComments, prevComments),
+      pendingComments: createCard(currentPendingComments, prevPendingComments),
+      quizAttempts: createCard(currentQuizAttempts, prevQuizAttempts),
+    };
+
+    const areaChartDataMap = new Map<
+      string,
+      {
+        date: string;
+        revenue: number;
+        enrollments: number;
+        reviews: number;
+      }
+    >();
+
+    const getAreaEntry = (dateKey: string) => {
+      if (!areaChartDataMap.has(dateKey)) {
+        areaChartDataMap.set(dateKey, {
+          date: dateKey,
+          revenue: 0,
+          enrollments: 0,
+          reviews: 0,
+        });
+      }
+      return areaChartDataMap.get(dateKey)!;
+    };
+
+    const currentDateIter = new Date(start);
+    while (currentDateIter <= end) {
+      const key = formatDate(currentDateIter);
+      if (!areaChartDataMap.has(key)) {
+        areaChartDataMap.set(key, {
+          date: key,
+          revenue: 0,
+          enrollments: 0,
+          reviews: 0,
+        });
+      }
+
+      if (groupBy === 'month') {
+        currentDateIter.setMonth(currentDateIter.getMonth() + 1);
+      } else {
+        currentDateIter.setDate(currentDateIter.getDate() + 1);
+      }
+    }
+
+    transactions.forEach((t) => {
+      const key = formatDate(t.transactionDate);
+      const entry = getAreaEntry(key);
+      entry.revenue += Number((t.teacherShare?.toNumber() || 0).toFixed(2));
     });
-    const currentBalance = await this.prisma.user.findUnique({
-      where: { id: teacherId },
-      select: { balance: true },
+    enrollmentsList.forEach((e) => {
+      const key = formatDate(e.purchasedAt);
+      const entry = getAreaEntry(key);
+      entry.enrollments += 1;
+    });
+    reviewsList.forEach((r) => {
+      const key = formatDate(r.createdAt);
+      const entry = getAreaEntry(key);
+      entry.reviews += 1;
     });
 
+    const areaChart = Array.from(areaChartDataMap.values())
+      .map((entry) => ({
+        ...entry,
+        revenue: Number(entry.revenue.toFixed(2)),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const barChart = coursesList.map((course) => {
+      const courseId = course.id;
+
+      const enrollments = enrollmentsList.filter(
+        (e) => e.courseId === courseId,
+      ).length;
+
+      const revenue = transactions
+        .filter(
+          (t) =>
+            t.orderItem?.productId === courseId &&
+            t.orderItem?.productType === ProductType.COURSE,
+        )
+        .reduce((sum, t) => sum + (t.teacherShare?.toNumber() || 0), 0);
+
+      const courseReviews = reviewsList.filter((r) => r.courseId === courseId);
+      const avgRating =
+        courseReviews.length > 0
+          ? courseReviews.reduce((sum, r) => sum + r.rating, 0) /
+            courseReviews.length
+          : 0;
+
+      const comments = commentsList.filter(
+        (c) => c.courseId === courseId,
+      ).length;
+
+      return {
+        courseName: course.courseName,
+        enrollments,
+        revenue: Number(revenue.toFixed(2)),
+        avgRating: Number(avgRating.toFixed(2)),
+        comments,
+      };
+    });
+
+    barChart.sort((a, b) => b.revenue - a.revenue);
+
+    const topCoursesBarChart = barChart.slice(0, 5);
+
+    const revenueByProduct = transactions.reduce(
+      (acc, t) => {
+        const type = t.orderItem?.productType;
+        const amount = t.teacherShare?.toNumber() || 0;
+        if (type === ProductType.COURSE) acc.courses += amount;
+        if (type === ProductType.BOOK) acc.books += amount;
+        return acc;
+      },
+      { courses: 0, books: 0 },
+    );
+
+    const pieChart = [
+      {
+        productType: 'courses',
+        revenue: Number(revenueByProduct.courses.toFixed(2)),
+      },
+      {
+        productType: 'books',
+        revenue: Number(revenueByProduct.books.toFixed(2)),
+      },
+    ];
+
+    const lineChartDataMap = new Map<
+      string,
+      {
+        date: string;
+        quizAttempts: number;
+        comments: number;
+        reviews: number;
+      }
+    >();
+
+    const getLineEntry = (dateKey: string) => {
+      if (!lineChartDataMap.has(dateKey)) {
+        lineChartDataMap.set(dateKey, {
+          date: dateKey,
+          quizAttempts: 0,
+          comments: 0,
+          reviews: 0,
+        });
+      }
+      return lineChartDataMap.get(dateKey)!;
+    };
+
+    const currentLineDateIter = new Date(start);
+    while (currentLineDateIter <= end) {
+      const key = formatDate(currentLineDateIter);
+      if (!lineChartDataMap.has(key)) {
+        lineChartDataMap.set(key, {
+          date: key,
+          quizAttempts: 0,
+          comments: 0,
+          reviews: 0,
+        });
+      }
+      if (groupBy === 'month') {
+        currentLineDateIter.setMonth(currentLineDateIter.getMonth() + 1);
+      } else {
+        currentLineDateIter.setDate(currentLineDateIter.getDate() + 1);
+      }
+    }
+
+    quizAttemptsList.forEach((q) => {
+      const key = formatDate(q.startedAt);
+      getLineEntry(key).quizAttempts += 1;
+    });
+    commentsList.forEach((c) => {
+      const key = formatDate(c.createdAt);
+      getLineEntry(key).comments += 1;
+    });
+    reviewsList.forEach((r) => {
+      const key = formatDate(r.createdAt);
+      getLineEntry(key).reviews += 1;
+    });
+
+    const lineChart = Array.from(lineChartDataMap.values()).sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+
     return {
-      totalEarnings: earnings._sum.teacherShare?.toNumber() || 0,
-      currentBalance: currentBalance?.balance.toNumber() || 0,
+      cards,
+      areaChart,
+      barChart: topCoursesBarChart,
+      pieChart,
+      lineChart,
     };
   }
 

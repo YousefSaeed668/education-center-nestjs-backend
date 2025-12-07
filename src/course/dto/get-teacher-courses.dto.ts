@@ -14,6 +14,7 @@ export enum TeacherCourseSortBy {
   NUMBER_OF_LECTURES = 'numberOfLectures',
   AVG_RATING = 'avgRating',
   CREATED_AT = 'createdAt',
+  TOTAL_REVENUE = 'totalRevenue',
 }
 
 export class GetTeacherCoursesDto {
@@ -89,6 +90,7 @@ export interface TeacherCourseQueryResult {
   price: number;
   avgRating: number;
   createdAt: Date;
+  totalRevenue: number;
   grade: {
     id: number;
     name: string;

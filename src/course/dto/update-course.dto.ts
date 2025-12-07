@@ -61,6 +61,9 @@ export class UpdateCourseDto {
 
   @IsOptional()
   @IsArray()
+  @ArrayMinSize(1, {
+    message: 'يجب ان تحتوي قائمة المميزات على ميزة واحدة على الأقل',
+  })
   @IsString({ each: true })
   @MaxLength(100, {
     each: true,

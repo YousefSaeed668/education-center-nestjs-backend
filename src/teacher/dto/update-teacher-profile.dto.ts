@@ -89,6 +89,7 @@ export class UpdateTeacherProfileDto {
   @IsStrongPassword({
     minSymbols: 0,
   })
+  @IsOptional()
   password: string;
 
   @IsOptional()
