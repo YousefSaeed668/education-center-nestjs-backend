@@ -443,7 +443,7 @@ export class CourseService {
       pageSize: limit,
     };
   }
-  async getCourse(id: number, userId?: number) {
+  async getCourse(id: number) {
     const course = await this.prisma.$queryRaw<CourseRow[]>`
 WITH course_base AS (
   SELECT 
@@ -477,21 +477,6 @@ course_stats AS (
     LEFT JOIN "CourseLecture" cl ON c.id = cl."courseId"
     LEFT JOIN "Review" r ON c.id = r."courseId"
     LEFT JOIN "Quiz" q ON cl."lectureId" = q."lectureId" AND q."isActive" = true
-  WHERE c.id = ${id}
-),
-
-course_ownership AS (
-  SELECT 
-    ${id} as course_id,
-    CASE 
-      WHEN ${userId}::integer IS NULL THEN false
-      WHEN sc."studentId" IS NOT NULL AND sc."isActive" = true THEN true
-      ELSE false
-    END as owned
-  FROM "Course" c
-    LEFT JOIN "StudentCourse" sc ON c.id = sc."courseId" 
-      AND sc."studentId" = ${userId}::integer
-      AND sc."isActive" = true
   WHERE c.id = ${id}
 ),
 
@@ -608,11 +593,9 @@ SELECT
   cs.students_count as "studentsCount",
   cs.lectures_count as "lecturesCount",
   cs.quizzes_count as "quizzesCount",
-  co.owned,
   COALESCE(lc.lectures_json, '[]'::json) as lectures
 FROM course_base cb
   CROSS JOIN course_stats cs
-  CROSS JOIN course_ownership co
   LEFT JOIN teacher_stats ts ON cb.course_id = cs.course_id
   LEFT JOIN lectures_complete lc ON cb.course_id = lc."courseId";
 `;
@@ -620,6 +603,21 @@ FROM course_base cb
       throw new NotFoundException('الدورة غير موجودة');
     }
     return course[0];
+  }
+
+  async getOwnershipStatus(courseId: number, userId: number) {
+    const ownership = await this.prisma.studentCourse.findFirst({
+      where: {
+        courseId,
+        studentId: userId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return { isOwned: !!ownership };
   }
   async getRelatedCourses(id: number) {
     try {
@@ -1038,5 +1036,15 @@ FROM course_base cb
       })),
       divisionIds: course.Division.map((d) => d.id),
     };
+  }
+  async getAllCoursesIds() {
+    const courses = await this.prisma.course.findMany({
+      select: {
+        id: true,
+      },
+    });
+    return courses.map((course) => ({
+      id: course.id.toString(),
+    }));
   }
 }

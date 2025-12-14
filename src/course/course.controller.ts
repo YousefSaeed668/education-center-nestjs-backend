@@ -85,15 +85,21 @@ export class CourseController {
   }
 
   @Public()
+  @Get('all-courses-ids')
+  getAllCoursesIds() {
+    return this.courseService.getAllCoursesIds();
+  }
+
+  @Public()
   @Get(':id')
   getCourse(@Param('id', ParseIntPipe) id: number) {
     return this.courseService.getCourse(id);
   }
 
   @Roles(Role.STUDENT)
-  @Get('getCourseForUser/:id')
-  getCourseForUser(@Param('id', ParseIntPipe) id: number, @Req() req) {
-    return this.courseService.getCourse(id, req.user.id);
+  @Get('get-ownership-status/:id')
+  getOwnershipStatus(@Param('id', ParseIntPipe) id: number, @Req() req) {
+    return this.courseService.getOwnershipStatus(id, req.user.id);
   }
   @Public()
   @Get('relatedCourses/:id')
