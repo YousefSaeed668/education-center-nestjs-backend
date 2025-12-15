@@ -42,35 +42,36 @@ model Address {
 }
 
 model Student {
-  id                 Int             @id
-  educationTypeId    Int
-  secondLangId       Int
-  schoolTypeId       Int
-  parentPhoneNumber  String
-  gradeId            Int
-  schoolName         String
-  cityId             Int
-  governmentId       Int
-  guardianId         Int?
-  isGuardianVerified Boolean         @default(false)
-  divisionId         Int
-  Cart               Cart?
-  Order              Order[]
-  city               City            @relation(fields: [cityId], references: [id])
-  division           Division        @relation(fields: [divisionId], references: [id])
-  educationType      EducationType   @relation(fields: [educationTypeId], references: [id])
-  government         Government      @relation(fields: [governmentId], references: [id])
-  grade              Grade           @relation(fields: [gradeId], references: [id])
-  guardian           Guardian?       @relation(fields: [guardianId], references: [id])
-  user               User            @relation(fields: [id], references: [id], onDelete: Cascade)
-  schoolType         SchoolType      @relation(fields: [schoolTypeId], references: [id])
-  secondLang         SecondLanguage  @relation(fields: [secondLangId], references: [id])
-  studentCourse      StudentCourse[]
-  address            Address[]
-  QuizAttempt        QuizAttempt[]
-  transactions       Transaction[]
-  Comment            Comment[]
-  Review             Review[]
+  id                       Int                      @id
+  educationTypeId          Int
+  secondLangId             Int
+  schoolTypeId             Int
+  parentPhoneNumber        String
+  gradeId                  Int
+  schoolName               String
+  cityId                   Int
+  governmentId             Int
+  guardianId               Int?
+  isGuardianVerified       Boolean                  @default(false)
+  divisionId               Int
+  Cart                     Cart?
+  Order                    Order[]
+  city                     City                     @relation(fields: [cityId], references: [id])
+  division                 Division                 @relation(fields: [divisionId], references: [id])
+  educationType            EducationType            @relation(fields: [educationTypeId], references: [id])
+  government               Government               @relation(fields: [governmentId], references: [id])
+  grade                    Grade                    @relation(fields: [gradeId], references: [id])
+  guardian                 Guardian?                @relation(fields: [guardianId], references: [id])
+  user                     User                     @relation(fields: [id], references: [id], onDelete: Cascade)
+  schoolType               SchoolType               @relation(fields: [schoolTypeId], references: [id])
+  secondLang               SecondLanguage           @relation(fields: [secondLangId], references: [id])
+  studentCourse            StudentCourse[]
+  address                  Address[]
+  QuizAttempt              QuizAttempt[]
+  transactions             Transaction[]
+  Comment                  Comment[]
+  Review                   Review[]
+  studentLectureProgresses StudentLectureProgress[]
 }
 
 model WithdrawRequest {

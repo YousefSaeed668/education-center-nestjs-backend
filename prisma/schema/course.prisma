@@ -51,15 +51,16 @@ model Lecture {
 }
 
 model LectureContent {
-  id          Int         @id @default(autoincrement())
-  lectureId   Int
-  contentType ContentType
-  contentUrl  String
-  duration    Int?
-  createdAt   DateTime    @default(now())
-  orderIndex  Int
-  contentName String
-  lecture     Lecture     @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+  id                       Int                      @id @default(autoincrement())
+  lectureId                Int
+  contentType              ContentType
+  contentUrl               String
+  duration                 Int?
+  createdAt                DateTime                 @default(now())
+  orderIndex               Int
+  contentName              String
+  lecture                  Lecture                  @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+  studentLectureProgresses StudentLectureProgress[]
 }
 
 model StudentCourse {
@@ -73,6 +74,21 @@ model StudentCourse {
   student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@unique([studentId, courseId])
+}
+
+model StudentLectureProgress {
+  id               Int       @id @default(autoincrement())
+  studentId        Int
+  lectureContentId Int
+  isCompleted      Boolean   @default(false)
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+
+  student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  lectureContent LectureContent @relation(fields: [lectureContentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, lectureContentId])
+  @@index([studentId, isCompleted])
 }
 
 enum CourseType {
