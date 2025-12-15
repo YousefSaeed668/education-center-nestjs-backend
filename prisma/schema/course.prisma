@@ -54,7 +54,7 @@ model LectureContent {
   id                       Int                      @id @default(autoincrement())
   lectureId                Int
   contentType              ContentType
-  contentUrl               String
+  contentKey               String
   duration                 Int?
   createdAt                DateTime                 @default(now())
   orderIndex               Int
