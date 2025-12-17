@@ -1,6 +1,7 @@
 import * as ffprobe from '@ffprobe-installer/ffprobe';
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -605,11 +606,11 @@ FROM course_base cb
     return course[0];
   }
 
-  async getOwnershipStatus(courseId: number, userId: number) {
+  async getOwnershipStatus(courseId: number, studentId: number) {
     const ownership = await this.prisma.studentCourse.findFirst({
       where: {
         courseId,
-        studentId: userId,
+        studentId,
         isActive: true,
       },
       select: {
@@ -1046,5 +1047,37 @@ FROM course_base cb
     return courses.map((course) => ({
       id: course.id.toString(),
     }));
+  }
+  async generateLectureContentUrl(
+    id: number,
+    courseId: number,
+    studentId: number,
+  ) {
+    const isOwned = await this.getOwnershipStatus(courseId, studentId);
+    if (!isOwned) {
+      throw new ForbiddenException('برجاء شراء الكورس اولا');
+    }
+    const lectureContent = await this.prisma.lectureContent.findFirst({
+      where: {
+        id,
+        lecture: {
+          CourseLecture: {
+            some: {
+              courseId: courseId,
+            },
+          },
+        },
+      },
+      select: {
+        contentKey: true,
+      },
+    });
+    if (!lectureContent) {
+      throw new NotFoundException('الدرس غير موجود');
+    }
+    const { url } = await this.s3Service.getPresignedSignedUrl(
+      lectureContent.contentKey,
+    );
+    return { url };
   }
 }

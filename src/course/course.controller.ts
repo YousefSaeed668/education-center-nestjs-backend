@@ -114,4 +114,18 @@ export class CourseController {
   ) {
     return this.courseService.getCourseDataForUpdate(req.user.id, courseId);
   }
+
+  @Roles(Role.STUDENT)
+  @Get('generate-lectureContent-url/:lectureContentId/:courseId')
+  generateLectureContentUrl(
+    @Param('lectureContentId', ParseIntPipe) lectureContentId: number,
+    @Param('courseId', ParseIntPipe) courseId: number,
+    @Req() req,
+  ) {
+    return this.courseService.generateLectureContentUrl(
+      lectureContentId,
+      courseId,
+      req.user.id,
+    );
+  }
 }

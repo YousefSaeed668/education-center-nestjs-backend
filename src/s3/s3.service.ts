@@ -101,7 +101,7 @@ export class S3Service {
       });
 
       const url = await getSignedUrl(this.client, command, {
-        expiresIn: 60 * 60 * 24,
+        expiresIn: 60 * 5,
       });
       return { url };
     } catch (error) {
