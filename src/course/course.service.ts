@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { ContentType, Prisma } from '@prisma/client';
 import * as ffmpeg from 'fluent-ffmpeg';
 import { HandleFiles } from 'src/common/services/handleFiles.service';
 import { ImageService } from 'src/common/services/image.service';
@@ -493,84 +493,6 @@ teacher_stats AS (
     LEFT JOIN "StudentCourse" sc2 ON c2.id = sc2."courseId"
   WHERE c.id = ${id}
   GROUP BY c."teacherId"
-),
-
-lecture_content_agg AS (
-  SELECT 
-    lc."lectureId",
-    JSON_AGG(
-      jsonb_build_object(
-        'duration', lc.duration,
-        'contentType', lc."contentType",
-        'orderIndex', lc."orderIndex",
-        'contentName', lc."contentName"
-      ) ORDER BY lc."orderIndex"
-    ) as content_json,
-    COUNT(*) as content_count,
-    COALESCE(SUM(CASE WHEN lc.duration IS NOT NULL THEN lc.duration ELSE 0 END), 0) as total_duration,
-    COUNT(CASE WHEN lc."contentType" = 'VIDEO' THEN 1 END) as video_count,
-    COUNT(CASE WHEN lc."contentType" = 'FILE' THEN 1 END) as file_count
-  FROM "LectureContent" lc
-    INNER JOIN "CourseLecture" cl ON lc."lectureId" = cl."lectureId"
-  WHERE cl."courseId" = ${id}
-  GROUP BY lc."lectureId"
-),
-
-quiz_agg AS (
-  SELECT 
-    q."lectureId",
-    JSON_AGG(
-      jsonb_build_object(
-        'id', q.id,
-        'title', q.title,
-        'description', q.description,
-        'maxAttempts', q."maxAttempts",
-        'orderIndex', q."orderIndex",
-        'isActive', q."isActive"
-      ) ORDER BY q."orderIndex"
-    ) as quiz_json,
-    COUNT(*) as quiz_count
-  FROM "Quiz" q
-    INNER JOIN "CourseLecture" cl ON q."lectureId" = cl."lectureId"
-  WHERE cl."courseId" = ${id} AND q."isActive" = true
-  GROUP BY q."lectureId"
-),
-
-lectures_complete AS (
-  SELECT 
-    cl."courseId",
-    JSON_AGG(
-      jsonb_build_object(
-        'id', l.id,
-        'lectureName', l."lectureName",
-        'orderIndex', cl."orderIndex",
-        'lectureContent', COALESCE(lca.content_json, '[]'::json),
-        'quizzes', COALESCE(qa.quiz_json, '[]'::json),
-        'totalItems', COALESCE(lca.content_count, 0) + COALESCE(qa.quiz_count, 0),
-        'totalDuration', COALESCE(lca.total_duration, 0),
-        'videoCount', COALESCE(lca.video_count, 0),
-        'fileCount', COALESCE(lca.file_count, 0),
-        'quizCount', COALESCE(qa.quiz_count, 0),
-        'formattedDuration', CASE 
-          WHEN COALESCE(lca.total_duration, 0) >= 3600 THEN 
-            CONCAT(
-              FLOOR(COALESCE(lca.total_duration, 0) / 3600), 'س ',
-              FLOOR((COALESCE(lca.total_duration, 0) % 3600) / 60), 'د '
-            )
-          WHEN COALESCE(lca.total_duration, 0) >= 60 THEN 
-            CONCAT(FLOOR(COALESCE(lca.total_duration, 0) / 60), 'د ')
-          WHEN COALESCE(lca.total_duration, 0) > 0 THEN
-            CONCAT(COALESCE(lca.total_duration, 0), 'ث ')
-          ELSE ''
-        END
-      ) ORDER BY cl."orderIndex"
-    ) as lectures_json
-  FROM "CourseLecture" cl
-    INNER JOIN "Lecture" l ON cl."lectureId" = l.id
-    LEFT JOIN lecture_content_agg lca ON l.id = lca."lectureId"
-    LEFT JOIN quiz_agg qa ON l.id = qa."lectureId"
-  WHERE cl."courseId" = ${id}
-  GROUP BY cl."courseId"
 )
 
 SELECT 
@@ -593,19 +515,201 @@ SELECT
   cs.course_rating as "courseRating",
   cs.students_count as "studentsCount",
   cs.lectures_count as "lecturesCount",
-  cs.quizzes_count as "quizzesCount",
-  COALESCE(lc.lectures_json, '[]'::json) as lectures
+  cs.quizzes_count as "quizzesCount"
 FROM course_base cb
   CROSS JOIN course_stats cs
-  LEFT JOIN teacher_stats ts ON cb.course_id = cs.course_id
-  LEFT JOIN lectures_complete lc ON cb.course_id = lc."courseId";
+  LEFT JOIN teacher_stats ts ON cb.course_id = cs.course_id;
 `;
     if (course.length === 0) {
       throw new NotFoundException('الدورة غير موجودة');
     }
     return course[0];
   }
+  async getcourseLectures(courseId: number, userId?: number) {
+    // Check if user owns the course (if userId is provided)
+    let isOwner = false;
+    if (userId) {
+      const ownership = await this.prisma.studentCourse.findFirst({
+        where: {
+          courseId,
+          studentId: userId,
+          isActive: true,
+        },
+        select: { id: true },
+      });
+      isOwner = !!ownership;
+    }
 
+    if (!isOwner) {
+      // Public or non-owner: return basic lecture info without completion data
+      const lectures = await this.prisma.$queryRaw`
+WITH lecture_content_agg AS (
+  SELECT 
+    lc."lectureId",
+    JSON_AGG(
+      jsonb_build_object(
+        'id', lc.id,
+        'duration', lc.duration,
+        'contentType', lc."contentType",
+        'orderIndex', lc."orderIndex",
+        'contentName', lc."contentName"
+      ) ORDER BY lc."orderIndex"
+    ) as content_json,
+    COUNT(*) as content_count,
+    COALESCE(SUM(CASE WHEN lc.duration IS NOT NULL THEN lc.duration ELSE 0 END), 0) as total_duration,
+    COUNT(CASE WHEN lc."contentType" = 'VIDEO' THEN 1 END) as video_count,
+    COUNT(CASE WHEN lc."contentType" = 'FILE' THEN 1 END) as file_count
+  FROM "LectureContent" lc
+    INNER JOIN "CourseLecture" cl ON lc."lectureId" = cl."lectureId"
+  WHERE cl."courseId" = ${courseId}
+  GROUP BY lc."lectureId"
+),
+
+quiz_agg AS (
+  SELECT 
+    q."lectureId",
+    JSON_AGG(
+      jsonb_build_object(
+        'id', q.id,
+        'title', q.title,
+        'description', q.description,
+        'maxAttempts', q."maxAttempts",
+        'orderIndex', q."orderIndex",
+        'isActive', q."isActive"
+      ) ORDER BY q."orderIndex"
+    ) as quiz_json,
+    COUNT(*) as quiz_count
+  FROM "Quiz" q
+    INNER JOIN "CourseLecture" cl ON q."lectureId" = cl."lectureId"
+  WHERE cl."courseId" = ${courseId} AND q."isActive" = true
+  GROUP BY q."lectureId"
+)
+
+SELECT 
+  l.id,
+  l."lectureName",
+  cl."orderIndex",
+  COALESCE(lca.content_json, '[]'::json) as "lectureContent",
+  COALESCE(qa.quiz_json, '[]'::json) as quizzes,
+  COALESCE(lca.content_count, 0)::integer + COALESCE(qa.quiz_count, 0)::integer as "totalItems",
+  COALESCE(lca.video_count, 0)::integer as "videoCount",
+  COALESCE(lca.file_count, 0)::integer as "fileCount",
+  COALESCE(qa.quiz_count, 0)::integer as "quizCount",
+  CASE 
+    WHEN COALESCE(lca.total_duration, 0) >= 3600 THEN 
+      CONCAT(
+        FLOOR(COALESCE(lca.total_duration, 0) / 3600), 'س ',
+        FLOOR((COALESCE(lca.total_duration, 0) % 3600) / 60), 'د '
+      )
+    WHEN COALESCE(lca.total_duration, 0) >= 60 THEN 
+      CONCAT(FLOOR(COALESCE(lca.total_duration, 0) / 60), 'د ')
+    WHEN COALESCE(lca.total_duration, 0) > 0 THEN
+      CONCAT(COALESCE(lca.total_duration, 0), 'ث ')
+    ELSE ''
+  END as "formattedDuration"
+FROM "CourseLecture" cl
+  INNER JOIN "Lecture" l ON cl."lectureId" = l.id
+  LEFT JOIN lecture_content_agg lca ON l.id = lca."lectureId"
+  LEFT JOIN quiz_agg qa ON l.id = qa."lectureId"
+WHERE cl."courseId" = ${courseId}
+ORDER BY cl."orderIndex";
+`;
+      return { lectures };
+    }
+
+    const lectures = await this.prisma.$queryRaw`
+WITH lecture_content_agg AS (
+  SELECT 
+    lc."lectureId",
+    JSON_AGG(
+      jsonb_build_object(
+        'id', lc.id,
+        'duration', lc.duration,
+        'contentType', lc."contentType",
+        'orderIndex', lc."orderIndex",
+        'contentName', lc."contentName",
+        'isCompleted', COALESCE(slp."isCompleted", false)
+      ) ORDER BY lc."orderIndex"
+    ) as content_json,
+    COUNT(*) as content_count,
+    COALESCE(SUM(CASE WHEN lc.duration IS NOT NULL THEN lc.duration ELSE 0 END), 0) as total_duration,
+    COUNT(CASE WHEN lc."contentType" = 'VIDEO' THEN 1 END) as video_count,
+    COUNT(CASE WHEN lc."contentType" = 'FILE' THEN 1 END) as file_count,
+    COUNT(CASE WHEN slp."isCompleted" = true THEN 1 END) as completed_count
+  FROM "LectureContent" lc
+    INNER JOIN "CourseLecture" cl ON lc."lectureId" = cl."lectureId"
+    LEFT JOIN "StudentLectureProgress" slp ON lc.id = slp."lectureContentId" AND slp."studentId" = ${userId}
+  WHERE cl."courseId" = ${courseId}
+  GROUP BY lc."lectureId"
+),
+
+quiz_attempts_count AS (
+  SELECT 
+    qa."quizId",
+    COUNT(*)::integer as attempt_count
+  FROM "QuizAttempt" qa
+  WHERE qa."studentId" = ${userId}
+  GROUP BY qa."quizId"
+),
+
+quiz_agg AS (
+  SELECT 
+    q."lectureId",
+    JSON_AGG(
+      jsonb_build_object(
+        'id', q.id,
+        'title', q.title,
+        'description', q.description,
+        'maxAttempts', q."maxAttempts",
+        'orderIndex', q."orderIndex",
+        'isActive', q."isActive",
+        'remainingAttempts', CASE 
+          WHEN q."maxAttempts" IS NULL THEN NULL
+          ELSE GREATEST(0, q."maxAttempts" - COALESCE(qac.attempt_count, 0))
+        END
+      ) ORDER BY q."orderIndex"
+    ) as quiz_json,
+    COUNT(*) as quiz_count,
+    COUNT(CASE WHEN qac.attempt_count >= 1 THEN 1 END) as completed_quiz_count
+  FROM "Quiz" q
+    INNER JOIN "CourseLecture" cl ON q."lectureId" = cl."lectureId"
+    LEFT JOIN quiz_attempts_count qac ON q.id = qac."quizId"
+  WHERE cl."courseId" = ${courseId} AND q."isActive" = true
+  GROUP BY q."lectureId"
+)
+
+SELECT 
+  l.id,
+  l."lectureName",
+  cl."orderIndex",
+  COALESCE(lca.content_json, '[]'::json) as "lectureContent",
+  COALESCE(qa.quiz_json, '[]'::json) as quizzes,
+  COALESCE(lca.content_count, 0)::integer + COALESCE(qa.quiz_count, 0)::integer as "totalItems",
+  COALESCE(lca.video_count, 0)::integer as "videoCount",
+  COALESCE(lca.file_count, 0)::integer as "fileCount",
+  COALESCE(qa.quiz_count, 0)::integer as "quizCount",
+  COALESCE(lca.completed_count, 0)::integer + COALESCE(qa.completed_quiz_count, 0)::integer as "totalCompletedContent",
+  CASE 
+    WHEN COALESCE(lca.total_duration, 0) >= 3600 THEN 
+      CONCAT(
+        FLOOR(COALESCE(lca.total_duration, 0) / 3600), 'س ',
+        FLOOR((COALESCE(lca.total_duration, 0) % 3600) / 60), 'د '
+      )
+    WHEN COALESCE(lca.total_duration, 0) >= 60 THEN 
+      CONCAT(FLOOR(COALESCE(lca.total_duration, 0) / 60), 'د ')
+    WHEN COALESCE(lca.total_duration, 0) > 0 THEN
+      CONCAT(COALESCE(lca.total_duration, 0), 'ث ')
+    ELSE ''
+  END as "formattedDuration"
+FROM "CourseLecture" cl
+  INNER JOIN "Lecture" l ON cl."lectureId" = l.id
+  LEFT JOIN lecture_content_agg lca ON l.id = lca."lectureId"
+  LEFT JOIN quiz_agg qa ON l.id = qa."lectureId"
+WHERE cl."courseId" = ${courseId}
+ORDER BY cl."orderIndex";
+`;
+    return { lectures };
+  }
   async getOwnershipStatus(courseId: number, studentId: number) {
     const ownership = await this.prisma.studentCourse.findFirst({
       where: {
@@ -1070,14 +1174,82 @@ FROM course_base cb
       },
       select: {
         contentKey: true,
+        contentType: true,
       },
     });
     if (!lectureContent) {
       throw new NotFoundException('الدرس غير موجود');
     }
+
+    if (lectureContent.contentType === ContentType.FILE) {
+      await this.markLectureContentAsCompletedInternal(studentId, id);
+    }
+
     const { url } = await this.s3Service.getPresignedSignedUrl(
       lectureContent.contentKey,
     );
     return { url };
+  }
+
+  async markLectureContentAsCompleted(
+    lectureContentId: number,
+    courseId: number,
+    studentId: number,
+  ) {
+    const { isOwned } = await this.getOwnershipStatus(courseId, studentId);
+    if (!isOwned) {
+      throw new ForbiddenException('برجاء شراء الكورس اولا');
+    }
+
+    const lectureContent = await this.prisma.lectureContent.findFirst({
+      where: {
+        id: lectureContentId,
+        lecture: {
+          CourseLecture: {
+            some: {
+              courseId: courseId,
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!lectureContent) {
+      throw new NotFoundException('المحتوى غير موجود');
+    }
+
+    await this.markLectureContentAsCompletedInternal(
+      studentId,
+      lectureContentId,
+    );
+
+    return { success: true };
+  }
+
+  private async markLectureContentAsCompletedInternal(
+    studentId: number,
+    lectureContentId: number,
+  ) {
+    await this.prisma.studentLectureProgress.upsert({
+      where: {
+        studentId_lectureContentId: {
+          studentId,
+          lectureContentId,
+        },
+      },
+      update: {
+        isCompleted: true,
+        completedAt: new Date(),
+      },
+      create: {
+        studentId,
+        lectureContentId,
+        isCompleted: true,
+        completedAt: new Date(),
+      },
+    });
   }
 }

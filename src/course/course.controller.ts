@@ -128,4 +128,31 @@ export class CourseController {
       req.user.id,
     );
   }
+  @Roles(Role.STUDENT)
+  @Get('lectures-for-student/:courseId')
+  getCourseLectureForStudent(
+    @Req() req,
+    @Param('courseId', ParseIntPipe) courseId: number,
+  ) {
+    return this.courseService.getcourseLectures(courseId, req.user.id);
+  }
+  @Public()
+  @Get('lectures/:courseId')
+  getCourseLecture(@Param('courseId', ParseIntPipe) courseId: number) {
+    return this.courseService.getcourseLectures(courseId);
+  }
+
+  @Roles(Role.STUDENT)
+  @Post('mark-content-completed/:lectureContentId/:courseId')
+  markLectureContentAsCompleted(
+    @Param('lectureContentId', ParseIntPipe) lectureContentId: number,
+    @Param('courseId', ParseIntPipe) courseId: number,
+    @Req() req,
+  ) {
+    return this.courseService.markLectureContentAsCompleted(
+      lectureContentId,
+      courseId,
+      req.user.id,
+    );
+  }
 }

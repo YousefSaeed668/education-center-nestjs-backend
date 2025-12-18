@@ -81,7 +81,7 @@ model StudentLectureProgress {
   studentId        Int
   lectureContentId Int
   isCompleted      Boolean   @default(false)
-  completedAt      DateTime?
+  completedAt      DateTime? 
   createdAt        DateTime  @default(now())
 
   student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
