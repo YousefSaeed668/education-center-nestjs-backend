@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -62,6 +63,13 @@ export class UpdateQuizDto {
   @IsInt()
   @Min(0)
   maxAttempts?: number;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1, { message: 'وقت الاختبار يجب ان يكون علي الاقل دقيقه واحدة' })
+  @Max(180, { message: 'وقت الاختبار يجب ان يكون علي الاكثر 180 دقيقه' })
+  timeLimit?: number;
 
   @IsOptional()
   @IsArray()

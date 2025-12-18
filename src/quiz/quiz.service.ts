@@ -16,7 +16,7 @@ export class QuizService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createQuiz(teacherId: number, createQuizDto: CreateQuizDto) {
-    const { lectureId, title, description, maxAttempts, questions } =
+    const { lectureId, title, description, maxAttempts, timeLimit, questions } =
       createQuizDto;
 
     const lecture = await this.prisma.lecture.findFirst({
@@ -59,6 +59,7 @@ export class QuizService {
           lectureId,
           teacherId,
           maxAttempts,
+          timeLimit,
           orderIndex,
         },
       });
@@ -131,8 +132,14 @@ export class QuizService {
       );
     }
 
-    const { title, description, maxAttempts, questions, deletedQuestionIds } =
-      updateQuizDto;
+    const {
+      title,
+      description,
+      maxAttempts,
+      timeLimit,
+      questions,
+      deletedQuestionIds,
+    } = updateQuizDto;
 
     if (questions) {
       const orderIndexes = questions.map((q) => q.orderIndex);
@@ -151,6 +158,7 @@ export class QuizService {
           ...(title && { title }),
           ...(description !== undefined && { description }),
           ...(maxAttempts !== undefined && { maxAttempts }),
+          ...(timeLimit !== undefined && { timeLimit }),
         },
       });
 

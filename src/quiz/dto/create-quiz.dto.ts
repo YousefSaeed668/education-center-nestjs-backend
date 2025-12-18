@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -64,9 +65,16 @@ export class CreateQuizDto {
   @IsInt()
   lectureId: number;
 
+  @Type(() => Number)
   @IsOptional()
   @IsInt()
-  @Min(1)
+  @Min(1, { message: 'وقت الاختبار يجب ان يكون علي الاقل دقيقه واحدة' })
+  @Max(180, { message: 'وقت الاختبار يجب ان يكون علي الاكثر 180 دقيقه' })
+  timeLimit?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1, { message: 'عدد المحاولات يجب ان يكون علي الاقل 1' })
   maxAttempts?: number;
 
   @IsInt()
