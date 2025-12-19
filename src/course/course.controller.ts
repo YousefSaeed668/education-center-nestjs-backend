@@ -96,7 +96,7 @@ export class CourseController {
     return this.courseService.getCourse(id);
   }
 
-  @Roles(Role.STUDENT)
+  @Roles(Role.STUDENT, Role.TEACHER)
   @Get('get-ownership-status/:id')
   getOwnershipStatus(@Param('id', ParseIntPipe) id: number, @Req() req) {
     return this.courseService.getOwnershipStatus(id, req.user.id);

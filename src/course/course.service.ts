@@ -77,7 +77,9 @@ export class CourseService {
       const { url } = await this.s3Service.uploadSingleFile({
         file: compressedThumbnail,
         isPublic: true,
-        folder: `courses/teacher-${teacherId}/${this.handleFiles.sanitizeFileName(body.courseName)}`,
+        folder: `courses/teacher-${teacherId}/${this.handleFiles.sanitizeFileName(
+          body.courseName,
+        )}`,
       });
 
       const course = await prisma.course.create({
@@ -258,7 +260,9 @@ export class CourseService {
         const thumbnailUrl = await this.s3Service.uploadSingleFile({
           file: compressedThumbnail,
           isPublic: true,
-          folder: `courses/teacher-${teacherId}/${this.handleFiles.sanitizeFileName(existingCourse.courseName)}`,
+          folder: `courses/teacher-${teacherId}/${this.handleFiles.sanitizeFileName(
+            existingCourse.courseName,
+          )}`,
         });
         filteredData.thumbnail = thumbnailUrl.url;
       }
@@ -355,21 +359,30 @@ export class CourseService {
     if (maxPrice !== undefined)
       whereConditions.push(Prisma.sql`c.price <= ${maxPrice}`);
 
-    const finalWhereClause = Prisma.sql`WHERE ${Prisma.join(whereConditions, ' AND ')}`;
+    const finalWhereClause = Prisma.sql`WHERE ${Prisma.join(
+      whereConditions,
+      ' AND ',
+    )}`;
 
     let orderByClause: Prisma.Sql;
     switch (sortBy) {
       case CourseSortBy.RATING:
-        orderByClause = Prisma.sql`COALESCE(review_stats.avg_rating, 0) ${Prisma.raw(sortOrder)}`;
+        orderByClause = Prisma.sql`COALESCE(review_stats.avg_rating, 0) ${Prisma.raw(
+          sortOrder,
+        )}`;
         break;
       case CourseSortBy.PRICE:
         orderByClause = Prisma.sql`c.price ${Prisma.raw(sortOrder)}`;
         break;
       case CourseSortBy.STUDENTS_COUNT:
-        orderByClause = Prisma.sql`COALESCE(student_count.student_count, 0) ${Prisma.raw(sortOrder)}`;
+        orderByClause = Prisma.sql`COALESCE(student_count.student_count, 0) ${Prisma.raw(
+          sortOrder,
+        )}`;
         break;
       default:
-        orderByClause = Prisma.sql`COALESCE(review_stats.avg_rating, 0) ${Prisma.raw(sortOrder)}`;
+        orderByClause = Prisma.sql`COALESCE(review_stats.avg_rating, 0) ${Prisma.raw(
+          sortOrder,
+        )}`;
     }
     const finalOrderByClause = Prisma.sql`ORDER BY ${orderByClause}, c.id`;
 
@@ -526,22 +539,12 @@ FROM course_base cb
     return course[0];
   }
   async getcourseLectures(courseId: number, userId?: number) {
-    // Check if user owns the course (if userId is provided)
     let isOwner = false;
     if (userId) {
-      const ownership = await this.prisma.studentCourse.findFirst({
-        where: {
-          courseId,
-          studentId: userId,
-          isActive: true,
-        },
-        select: { id: true },
-      });
-      isOwner = !!ownership;
+      isOwner = await this.checkOwnership(courseId, userId);
     }
 
     if (!isOwner) {
-      // Public or non-owner: return basic lecture info without completion data
       const lectures = await this.prisma.$queryRaw`
 WITH lecture_content_agg AS (
   SELECT 
@@ -710,11 +713,19 @@ ORDER BY cl."orderIndex";
 `;
     return { lectures };
   }
-  async getOwnershipStatus(courseId: number, studentId: number) {
+  async getOwnershipStatus(courseId: number, userId: number) {
+    const isOwned = await this.checkOwnership(courseId, userId);
+    return { isOwned };
+  }
+
+  private async checkOwnership(
+    courseId: number,
+    userId: number,
+  ): Promise<boolean> {
     const ownership = await this.prisma.studentCourse.findFirst({
       where: {
         courseId,
-        studentId,
+        studentId: userId,
         isActive: true,
       },
       select: {
@@ -722,7 +733,16 @@ ORDER BY cl."orderIndex";
       },
     });
 
-    return { isOwned: !!ownership };
+    if (ownership) {
+      return true;
+    }
+
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      select: { teacherId: true },
+    });
+
+    return !!(course && course.teacherId === userId);
   }
   async getRelatedCourses(id: number) {
     try {
@@ -906,7 +926,10 @@ ORDER BY cl."orderIndex";
       whereConditions.push(Prisma.sql`c.price <= ${maxPrice}`);
     }
 
-    const finalWhereClause = Prisma.sql`WHERE ${Prisma.join(whereConditions, ' AND ')}`;
+    const finalWhereClause = Prisma.sql`WHERE ${Prisma.join(
+      whereConditions,
+      ' AND ',
+    )}`;
 
     const havingConditions: Prisma.Sql[] = [];
 
