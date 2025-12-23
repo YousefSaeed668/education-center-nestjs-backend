@@ -1,5 +1,5 @@
 model Quiz {
-  id          Int      @id @default(autoincrement())
+  id          Int            @id @default(autoincrement())
   title       String
   description String?
   lectureId   Int
@@ -7,13 +7,13 @@ model Quiz {
   maxAttempts Int?
   timeLimit   Int?
   orderIndex  Int
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  lecture   Lecture        @relation(fields: [lectureId], references: [id], onDelete: Cascade)
-  teacher   Teacher        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  questions QuizQuestion[]
-  attempts  QuizAttempt[]
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  lecture     Lecture        @relation(fields: [lectureId], references: [id], onDelete: Cascade)
+  teacher     Teacher        @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  questions   QuizQuestion[]
+  attempts    QuizAttempt[]
 
   @@unique([lectureId, orderIndex])
 }
@@ -57,8 +57,6 @@ model QuizAttempt {
   quiz    Quiz         @relation(fields: [quizId], references: [id], onDelete: Cascade)
   student Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
   answers QuizAnswer[]
-
-  @@unique([quizId, studentId])
 }
 
 model QuizAnswer {

@@ -651,7 +651,7 @@ quiz_attempts_count AS (
     qa."quizId",
     COUNT(*)::integer as attempt_count
   FROM "QuizAttempt" qa
-  WHERE qa."studentId" = ${userId}
+  WHERE qa."studentId" = ${userId} AND qa."isCompleted" = true
   GROUP BY qa."quizId"
 ),
 

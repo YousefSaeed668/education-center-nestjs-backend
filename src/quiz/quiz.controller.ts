@@ -15,6 +15,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CreateQuizDto } from './dto/create-quiz.dto';
 import { GetQuizzesDto } from './dto/get-quizzes.dto';
 import { ReorderQuizzesDto } from './dto/reorder-quizzes.dto';
+import { SubmitQuizDto } from './dto/submit-quiz.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
 import { QuizService } from './quiz.service';
 
@@ -56,10 +57,43 @@ export class QuizController {
 
   @Roles(Role.TEACHER)
   @Get(':quizId')
-  getQuizById(@Req() req, @Param('quizId', ParseIntPipe) quizId: number) {
-    return this.quizService.getQuizById(req.user.id, quizId);
+  getQuizByIdTeacher(
+    @Req() req,
+    @Param('quizId', ParseIntPipe) quizId: number,
+  ) {
+    return this.quizService.getQuizById(req.user.id, quizId, req.user.role);
   }
 
+  @Roles(Role.STUDENT)
+  @Get(':courseId/:quizId')
+  getQuizByIdStudent(
+    @Req() req,
+    @Param('courseId', ParseIntPipe) courseId: number,
+    @Param('quizId', ParseIntPipe) quizId: number,
+  ) {
+    return this.quizService.getQuizById(
+      req.user.id,
+      quizId,
+      req.user.role,
+      courseId,
+    );
+  }
+
+  @Roles(Role.STUDENT)
+  @Post(':courseId/:quizId/submit')
+  submitQuiz(
+    @Req() req,
+    @Param('courseId', ParseIntPipe) courseId: number,
+    @Param('quizId', ParseIntPipe) quizId: number,
+    @Body() submitQuizDto: SubmitQuizDto,
+  ) {
+    return this.quizService.submitQuiz(
+      req.user.id,
+      quizId,
+      courseId,
+      submitQuizDto,
+    );
+  }
   @Roles(Role.TEACHER)
   @Get('lecture/:lectureId')
   getQuizzesByLecture(
