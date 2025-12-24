@@ -90,7 +90,7 @@ export class UpdateTeacherProfileDto {
     minSymbols: 0,
   })
   @IsOptional()
-  password: string;
+  password?: string;
 
   @IsOptional()
   gradeIds: number[];

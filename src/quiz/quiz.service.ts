@@ -385,12 +385,10 @@ export class QuizService {
       (attempt) => attempt.isCompleted,
     ).length;
 
-   
     const activeAttempt = existingAttempts.find(
       (attempt) => !attempt.isCompleted,
     );
 
-   
     if (activeAttempt) {
       const currentAttemptNumber = completedAttemptsCount + 1;
       const { lecture, ...quizData } = quiz;
@@ -408,14 +406,12 @@ export class QuizService {
       };
     }
 
-   
     if (quiz.maxAttempts && completedAttemptsCount >= quiz.maxAttempts) {
       throw new BadRequestException(
         `لقد استنفذت جميع المحاولات المتاحة (${completedAttemptsCount}/${quiz.maxAttempts})`,
       );
     }
 
-   
     await this.prisma.quizAttempt.create({
       data: {
         quizId,
@@ -445,7 +441,6 @@ export class QuizService {
     courseId: number,
     submitQuizDto: SubmitQuizDto,
   ) {
-   
     const studentCourse = await this.prisma.studentCourse.findFirst({
       where: {
         studentId,
@@ -459,7 +454,6 @@ export class QuizService {
       );
     }
 
-   
     const quiz = await this.prisma.quiz.findFirst({
       where: {
         id: quizId,
@@ -486,7 +480,6 @@ export class QuizService {
       );
     }
 
-   
     const activeAttempt = await this.prisma.quizAttempt.findFirst({
       where: {
         quizId,
@@ -503,7 +496,6 @@ export class QuizService {
 
     const { answers } = submitQuizDto;
 
-   
     const correctAnswersMap = new Map<number, number>();
     for (const question of quiz.questions) {
       const correctOption = question.options.find((opt) => opt.isCorrect);
@@ -512,7 +504,6 @@ export class QuizService {
       }
     }
 
-   
     let correctCount = 0;
     const answerResults: {
       questionId: number;
@@ -559,9 +550,7 @@ export class QuizService {
     const scorePercentage =
       totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
 
-   
     await this.prisma.$transaction(async (prisma) => {
-     
       await prisma.quizAttempt.update({
         where: { id: activeAttempt.id },
         data: {
@@ -571,7 +560,6 @@ export class QuizService {
         },
       });
 
-     
       await prisma.quizAnswer.createMany({
         data: quizAnswersData,
       });

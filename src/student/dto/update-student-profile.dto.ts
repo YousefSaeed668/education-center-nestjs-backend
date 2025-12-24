@@ -1,13 +1,14 @@
+import { Type } from 'class-transformer';
 import {
+  IsInt,
   IsOptional,
   IsPhoneNumber,
   IsString,
+  IsStrongPassword,
   MaxLength,
-  MinLength,
-  IsInt,
   Min,
+  MinLength,
 } from 'class-validator';
-import { Type } from 'class-transformer';
 
 export class UpdateStudentProfileDto {
   @IsOptional()
@@ -19,6 +20,12 @@ export class UpdateStudentProfileDto {
   @MinLength(3, { message: 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل' })
   @MaxLength(30, { message: 'اسم المستخدم يجب ألا يتجاوز 30 حرف' })
   displayName?: string;
+
+  @IsOptional()
+  @IsStrongPassword({
+    minSymbols: 0,
+  })
+  password?: string;
 
   @IsOptional()
   @Type(() => Number)

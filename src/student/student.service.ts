@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PaymentSource, WithdrawUserType } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
 import { PaymentPurpose } from 'src/paymob/IPaymob';
 import { PaymobService } from 'src/paymob/paymob.service';
@@ -43,6 +44,9 @@ export class StudentService {
         profilePicture: newProfilePictureUrl,
         displayName: body.displayName,
         phoneNumber: body.phoneNumber,
+        password: body.password
+          ? await bcrypt.hash(body.password, 10)
+          : undefined,
       });
 
       const studentData = HelperFunctionsService.removeUndefined({
@@ -209,5 +213,60 @@ export class StudentService {
         city: true,
       },
     });
+  }
+
+  async getStudentProfileForUpdate(studentId: number) {
+    const student = await this.prisma.student.findUnique({
+      where: {
+        id: studentId,
+      },
+      select: {
+        educationTypeId: true,
+        secondLangId: true,
+        schoolTypeId: true,
+        parentPhoneNumber: true,
+        gradeId: true,
+        divisionId: true,
+        schoolName: true,
+        cityId: true,
+        governmentId: true,
+        user: {
+          select: {
+            displayName: true,
+            phoneNumber: true,
+            profilePicture: true,
+          },
+        },
+      },
+    });
+
+    const [
+      governments,
+      cities,
+      educationTypes,
+      secondLangs,
+      schoolTypes,
+      grades,
+      divisions,
+    ] = await Promise.all([
+      this.prisma.government.findMany(),
+      this.prisma.city.findMany(),
+      this.prisma.educationType.findMany(),
+      this.prisma.secondLanguage.findMany(),
+      this.prisma.schoolType.findMany(),
+      this.prisma.grade.findMany(),
+      this.prisma.division.findMany(),
+    ]);
+
+    return {
+      student,
+      governments,
+      cities,
+      educationTypes,
+      secondLangs,
+      schoolTypes,
+      grades,
+      divisions,
+    };
   }
 }

@@ -77,23 +77,28 @@ export class CreateStudentDto extends CreateUserDto {
   @IsInt()
   @Min(1, { message: 'معرف المحافظة يجب أن يكون 1 على الأقل' })
   @IsNotEmpty()
+  @Type(() => Number)
   governmentId: number;
 
   @IsInt()
   @Min(1, { message: 'معرف المدينة يجب أن يكون 1 على الأقل' })
   @IsNotEmpty()
+  @Type(() => Number)
   cityId: number;
 
   @IsInt()
   @Min(1, { message: 'معرف نوع التعليم يجب أن يكون 1 على الأقل' })
+  @Type(() => Number)
   educationTypeId: number;
 
   @IsInt()
   @Min(1, { message: 'معرف اللغة الثانية يجب أن يكون 1 على الأقل' })
+  @Type(() => Number)
   secondLangId: number;
 
   @IsInt()
   @Min(1, { message: 'معرف نوع المدرسة يجب أن يكون 1 على الأقل' })
+  @Type(() => Number)
   schoolTypeId: number;
 
   @IsPhoneNumber('EG')
@@ -101,10 +106,12 @@ export class CreateStudentDto extends CreateUserDto {
 
   @IsInt()
   @Min(1, { message: 'معرف الصف يجب أن يكون 1 على الأقل' })
+  @Type(() => Number)
   gradeId: number;
 
   @IsInt()
   @Min(1, { message: 'معرف الشعبة يجب أن يكون 1 على الأقل' })
+  @Type(() => Number)
   divisionId: number;
 
   @IsString()

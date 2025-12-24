@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Req,
   UploadedFile,
   UseInterceptors,
@@ -21,8 +22,8 @@ import { StudentService } from './student.service';
 export class StudentController {
   constructor(private readonly studentService: StudentService) {}
 
-  @Post('update-profile')
-  @UseInterceptors(FileInterceptor('file'))
+  @Put('update-profile')
+  @UseInterceptors(FileInterceptor('profilePicture'))
   updateProfile(
     @Req() req,
     @Body() body: UpdateStudentProfileDto,
@@ -51,5 +52,10 @@ export class StudentController {
   @Get('get-addresses')
   getAddresses(@Req() req) {
     return this.studentService.getAddresses(req.user.id);
+  }
+
+  @Get('info-for-update')
+  studentInfoForUpdate(@Req() req) {
+    return this.studentService.getStudentProfileForUpdate(req.user.id);
   }
 }
