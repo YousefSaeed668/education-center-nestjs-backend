@@ -15,6 +15,12 @@ import {
   StudentCourseQueryResult,
   StudentCourseSortBy,
 } from './dto/get-student-courses.dto';
+import {
+  GetStudentInvoicesDto,
+  InvoiceSortBy,
+  SortOrder as InvoiceSortOrder,
+  StudentInvoiceQueryResult,
+} from './dto/get-student-invoices.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 
 @Injectable()
@@ -386,6 +392,143 @@ export class StudentService {
 
     return {
       courses,
+      total,
+      totalPages,
+      pageNumber,
+      pageSize,
+    };
+  }
+
+  async getMyInvoices(studentId: number, query: GetStudentInvoicesDto) {
+    const {
+      sortBy = InvoiceSortBy.INVOICE_DATE,
+      sortOrder = InvoiceSortOrder.DESC,
+      pageNumber = 1,
+      pageSize = 20,
+      minAmount,
+      maxAmount,
+      paymentSource,
+      status,
+      minProducts,
+      maxProducts,
+    } = query;
+
+    const offset = (pageNumber - 1) * pageSize;
+
+    const whereConditions: Prisma.Sql[] = [
+      Prisma.sql`o."studentId" = ${studentId}`,
+    ];
+
+    if (minAmount !== undefined) {
+      whereConditions.push(Prisma.sql`o."totalAmount" >= ${minAmount}`);
+    }
+
+    if (maxAmount !== undefined) {
+      whereConditions.push(Prisma.sql`o."totalAmount" <= ${maxAmount}`);
+    }
+
+    if (status !== undefined) {
+      whereConditions.push(Prisma.sql`o."status"::"text" = ${status}::"text"`);
+    }
+
+    if (paymentSource !== undefined) {
+      whereConditions.push(
+        Prisma.sql`t."paymentSource"::"text" = ${paymentSource}::"text"`,
+      );
+    }
+
+    const finalWhereClause = Prisma.sql`WHERE ${Prisma.join(
+      whereConditions,
+      ' AND ',
+    )}`;
+
+    const havingConditions: Prisma.Sql[] = [];
+
+    if (minProducts !== undefined) {
+      havingConditions.push(Prisma.sql`COUNT(oi.id) >= ${minProducts}`);
+    }
+
+    if (maxProducts !== undefined) {
+      havingConditions.push(Prisma.sql`COUNT(oi.id) <= ${maxProducts}`);
+    }
+
+    const finalHavingClause =
+      havingConditions.length > 0
+        ? Prisma.sql`HAVING ${Prisma.join(havingConditions, ' AND ')}`
+        : Prisma.sql``;
+
+    let orderByClause: Prisma.Sql;
+    const order =
+      sortOrder === InvoiceSortOrder.ASC ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+
+    switch (sortBy) {
+      case InvoiceSortBy.INVOICE_DATE:
+        orderByClause = Prisma.sql`o."createdAt" ${order}`;
+        break;
+      case InvoiceSortBy.TOTAL_AMOUNT:
+        orderByClause = Prisma.sql`o."totalAmount" ${order}`;
+        break;
+      case InvoiceSortBy.STATUS:
+        orderByClause = Prisma.sql`o."status" ${order}`;
+        break;
+      case InvoiceSortBy.PAYMENT_SOURCE:
+        orderByClause = Prisma.sql`t."paymentSource" ${order}`;
+        break;
+      case InvoiceSortBy.PRODUCTS_COUNT:
+        orderByClause = Prisma.sql`"productsCount" ${order}`;
+        break;
+      default:
+        orderByClause = Prisma.sql`o."createdAt" ${order}`;
+    }
+
+    const finalOrderByClause = Prisma.sql`ORDER BY ${orderByClause}, o.id`;
+
+    const [countResult, result] = await this.prisma.$transaction([
+      this.prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(DISTINCT o.id)::bigint as count
+        FROM "Order" o
+        LEFT JOIN "OrderItem" oi ON o.id = oi."orderId"
+        LEFT JOIN "Transaction" t ON oi.id = t."orderItemId" AND t."transactionType" = 'ORDER'
+        ${finalWhereClause}
+        ${havingConditions.length > 0 ? Prisma.sql`GROUP BY o.id ${finalHavingClause}` : Prisma.sql``}
+      `,
+      this.prisma.$queryRaw<StudentInvoiceQueryResult[]>`
+        SELECT 
+          o.id as "invoiceNumber",
+          o."createdAt" as "invoiceDate",
+          COUNT(oi.id)::int as "productsCount",
+          JSON_AGG(
+            jsonb_build_object(
+              'name', COALESCE(c."courseName", b."bookName"),
+              'type', oi."productType",
+              'price', oi.price::float
+            )
+          ) as products,
+          o."totalAmount"::float as "totalAmount",
+          o."status" as status,
+          t."paymentSource" as "paymentSource"
+        FROM "Order" o
+        LEFT JOIN "OrderItem" oi ON o.id = oi."orderId"
+        LEFT JOIN "Course" c ON oi."productId" = c.id AND oi."productType" = 'COURSE'
+        LEFT JOIN "Book" b ON oi."productId" = b.id AND oi."productType" = 'BOOK'
+        LEFT JOIN "Transaction" t ON oi.id = t."orderItemId" AND t."transactionType" = 'ORDER'
+        ${finalWhereClause}
+        GROUP BY o.id, o."createdAt", o."totalAmount", o."status", t."paymentSource"
+        ${finalHavingClause}
+        ${finalOrderByClause}
+        LIMIT ${pageSize} OFFSET ${offset}
+      `,
+    ]);
+
+    const invoices = result;
+    const total =
+      havingConditions.length > 0
+        ? (countResult as unknown[]).length
+        : Number(countResult[0]?.count || 0);
+    const totalPages = Math.ceil(total / pageSize);
+
+    return {
+      invoices,
       total,
       totalPages,
       pageNumber,
