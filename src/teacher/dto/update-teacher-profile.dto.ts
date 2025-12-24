@@ -6,6 +6,7 @@ import {
   MaxLength,
   MinLength,
   ValidateBy,
+  ValidateIf,
   ValidationOptions,
 } from 'class-validator';
 
@@ -86,10 +87,19 @@ export class UpdateTeacherProfileDto {
   @IsSocialMediaJSON()
   socialMedia: string;
 
-  @IsStrongPassword({
-    minSymbols: 0,
-  })
   @IsOptional()
+  @ValidateIf(
+    (o) => o.password !== undefined && o.password !== null && o.password !== '',
+  )
+  @IsStrongPassword(
+    {
+      minSymbols: 0,
+    },
+    {
+      message:
+        'الباسورد يجب ان يحتوى على 8 احرف على الاقل و 1 حرف كبير و 1 حرف صغير ورقم',
+    },
+  )
   password?: string;
 
   @IsOptional()

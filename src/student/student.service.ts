@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
-import { PaymentSource, WithdrawUserType } from '@prisma/client';
+import { PaymentSource, Prisma, WithdrawUserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
 import { PaymentPurpose } from 'src/paymob/IPaymob';
@@ -9,6 +9,12 @@ import { PrismaService } from 'src/prisma.service';
 import { S3Service } from 'src/s3/s3.service';
 import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
 import { UserService } from 'src/user/user.service';
+import {
+  GetStudentCoursesDto,
+  SortOrder,
+  StudentCourseQueryResult,
+  StudentCourseSortBy,
+} from './dto/get-student-courses.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 
 @Injectable()
@@ -267,6 +273,123 @@ export class StudentService {
       schoolTypes,
       grades,
       divisions,
+    };
+  }
+
+  async getMyCourses(studentId: number, query: GetStudentCoursesDto) {
+    const {
+      sortBy = StudentCourseSortBy.PURCHASE_DATE,
+      sortOrder = SortOrder.DESC,
+      pageNumber = 1,
+      pageSize = 20,
+      q,
+      courseType,
+      minPrice,
+      maxPrice,
+    } = query;
+
+    const offset = (pageNumber - 1) * pageSize;
+
+    const whereConditions: Prisma.Sql[] = [
+      Prisma.sql`sc."studentId" = ${studentId}`,
+    ];
+
+    if (q?.trim()) {
+      whereConditions.push(
+        Prisma.sql`c."courseName" ILIKE ${'%' + q.trim() + '%'}`,
+      );
+    }
+
+    if (courseType !== undefined) {
+      whereConditions.push(
+        Prisma.sql`c."courseType"::"text" = ${courseType}::"text"`,
+      );
+    }
+
+    if (minPrice !== undefined) {
+      whereConditions.push(Prisma.sql`c.price >= ${minPrice}`);
+    }
+
+    if (maxPrice !== undefined) {
+      whereConditions.push(Prisma.sql`c.price <= ${maxPrice}`);
+    }
+
+    const finalWhereClause = Prisma.sql`WHERE ${Prisma.join(
+      whereConditions,
+      ' AND ',
+    )}`;
+
+    let orderByClause: Prisma.Sql;
+    const order =
+      sortOrder === SortOrder.ASC ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+
+    switch (sortBy) {
+      case StudentCourseSortBy.COURSE_NAME:
+        orderByClause = Prisma.sql`c."courseName" ${order}`;
+        break;
+      case StudentCourseSortBy.TEACHER_NAME:
+        orderByClause = Prisma.sql`u."displayName" ${order}`;
+        break;
+      case StudentCourseSortBy.COURSE_TYPE:
+        orderByClause = Prisma.sql`c."courseType" ${order}`;
+        break;
+      case StudentCourseSortBy.PRICE:
+        orderByClause = Prisma.sql`c.price ${order}`;
+        break;
+      case StudentCourseSortBy.PURCHASE_DATE:
+        orderByClause = Prisma.sql`sc."purchasedAt" ${order}`;
+        break;
+      case StudentCourseSortBy.EXPIRATION_DATE:
+        orderByClause = Prisma.sql`sc."expiresAt" ${order}`;
+        break;
+      case StudentCourseSortBy.STATUS:
+        orderByClause = Prisma.sql`sc."isActive" ${order}`;
+        break;
+      default:
+        orderByClause = Prisma.sql`sc."purchasedAt" ${order}`;
+    }
+
+    const finalOrderByClause = Prisma.sql`ORDER BY ${orderByClause}, sc.id`;
+
+    const [countResult, result] = await this.prisma.$transaction([
+      this.prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(*)::bigint as count
+        FROM "StudentCourse" sc
+        INNER JOIN "Course" c ON sc."courseId" = c.id
+        INNER JOIN "Teacher" t ON c."teacherId" = t.id
+        INNER JOIN "User" u ON t.id = u.id
+        ${finalWhereClause}
+      `,
+      this.prisma.$queryRaw<StudentCourseQueryResult[]>`
+        SELECT 
+          c.id as "id",
+          c."courseName",
+          c."courseType",
+          c.price::float as price,
+          sc."purchasedAt" as "purchaseDate",
+          sc."expiresAt" as "expirationDate",
+          sc."isActive" as status,
+          u."displayName" as "teacherName"
+        FROM "StudentCourse" sc
+        INNER JOIN "Course" c ON sc."courseId" = c.id
+        INNER JOIN "Teacher" t ON c."teacherId" = t.id
+        INNER JOIN "User" u ON t.id = u.id
+        ${finalWhereClause}
+        ${finalOrderByClause}
+        LIMIT ${pageSize} OFFSET ${offset}
+      `,
+    ]);
+
+    const courses = result;
+    const total = Number(countResult[0]?.count || 0);
+    const totalPages = Math.ceil(total / pageSize);
+
+    return {
+      courses,
+      total,
+      totalPages,
+      pageNumber,
+      pageSize,
     };
   }
 }

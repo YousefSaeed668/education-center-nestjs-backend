@@ -4,6 +4,7 @@ import {
   Get,
   Post,
   Put,
+  Query,
   Req,
   UploadedFile,
   UseInterceptors,
@@ -13,6 +14,7 @@ import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
+import { GetStudentCoursesDto } from './dto/get-student-courses.dto';
 import { RechargeBalanceDto } from './dto/reacharge-balance.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { StudentService } from './student.service';
@@ -57,5 +59,10 @@ export class StudentController {
   @Get('info-for-update')
   studentInfoForUpdate(@Req() req) {
     return this.studentService.getStudentProfileForUpdate(req.user.id);
+  }
+
+  @Get('my-courses')
+  getMyCourses(@Req() req, @Query() query: GetStudentCoursesDto) {
+    return this.studentService.getMyCourses(req.user.id, query);
   }
 }

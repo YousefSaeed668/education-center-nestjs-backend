@@ -8,6 +8,7 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
 export class UpdateStudentProfileDto {
@@ -22,9 +23,18 @@ export class UpdateStudentProfileDto {
   displayName?: string;
 
   @IsOptional()
-  @IsStrongPassword({
-    minSymbols: 0,
-  })
+  @ValidateIf(
+    (o) => o.password !== undefined && o.password !== null && o.password !== '',
+  )
+  @IsStrongPassword(
+    {
+      minSymbols: 0,
+    },
+    {
+      message:
+        'الباسورد يجب ان يحتوى على 8 احرف على الاقل و 1 حرف كبير و 1 حرف صغير ورقم',
+    },
+  )
   password?: string;
 
   @IsOptional()
