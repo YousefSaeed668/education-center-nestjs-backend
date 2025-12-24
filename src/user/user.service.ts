@@ -1,14 +1,15 @@
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
+import { WithdrawUserType } from '@prisma/client';
 import { ImageService } from 'src/common/services/image.service';
 import { PrismaService } from 'src/prisma.service';
 import { S3Service } from 'src/s3/s3.service';
-import { WithdrawUserType } from '@prisma/client';
 import { CreateWithdrawRequestDto } from './dto/create-withdraw-request.dto';
 import { GetAllUsersDto } from './dto/get-all-users.dto';
+import { GetWithdrawRequestsDto } from './dto/get-withdrawal-requests.dto';
 
 @Injectable()
 export class UserService {
@@ -127,5 +128,69 @@ export class UserService {
         data: withdrawRequest,
       };
     });
+  }
+  async getWithdrawRequests(userId: number, query: GetWithdrawRequestsDto) {
+    const {
+      pageNumber = 1,
+      pageSize = 20,
+      sortBy = 'createdAt',
+      sortOrder = 'DESC',
+      maxAmount,
+      minAmount,
+      paymentMethod,
+      status,
+    } = query;
+    const take = pageSize;
+    const skip = (pageNumber - 1) * take;
+    const whereClause: any = {
+      userId: userId,
+    };
+    if (minAmount !== undefined || maxAmount !== undefined) {
+      whereClause.amount = {};
+
+      if (minAmount !== undefined) {
+        whereClause.amount.gte = minAmount;
+      }
+
+      if (maxAmount !== undefined) {
+        whereClause.amount.lte = maxAmount;
+      }
+    }
+    if (paymentMethod) {
+      whereClause.paymentMethod = paymentMethod;
+    }
+    if (status) {
+      whereClause.status = status;
+    }
+    const [count, withdrawals] = await Promise.all([
+      this.prisma.withdrawRequest.count({
+        where: whereClause,
+      }),
+      this.prisma.withdrawRequest.findMany({
+        where: whereClause,
+        orderBy: {
+          [sortBy]: sortOrder.toLowerCase(),
+        },
+        select: {
+          id: true,
+          amount: true,
+          status: true,
+          createdAt: true,
+          paymentMethod: true,
+          adminNotes: true,
+          accountHolderName: true,
+        },
+        take,
+        skip,
+      }),
+    ]);
+    const totalPages = Math.ceil(count / take);
+    return {
+      withdrawals,
+      total: count,
+      totalPages,
+      pageNumber,
+      pageSize: take,
+    };
   }
 }

@@ -1,7 +1,7 @@
 import { PaymentMethod, WithdrawStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { IsEnum, IsNumber, IsOptional, Min } from 'class-validator';
-import { SortOrder } from './get-teachers.dto';
+import { SortOrder } from 'src/lecture/dto/get-teacher-lectures.dto';
 
 export enum WithdrawRequestSortBy {
   DATE = 'createdAt',

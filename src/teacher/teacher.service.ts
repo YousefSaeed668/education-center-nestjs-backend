@@ -21,7 +21,6 @@ import {
   TeacherQueryResult,
   TeacherSortBy,
 } from './dto/get-teachers.dto';
-import { GetWithdrawRequestsDto } from './dto/get-withdrawal-requests.dto';
 import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 
 @Injectable()
@@ -820,70 +819,7 @@ export class TeacherService {
       grades: teacherClasses?.grade,
     };
   }
-  async getWithdrawRequests(teacherId: number, query: GetWithdrawRequestsDto) {
-    const {
-      pageNumber = 1,
-      pageSize = 20,
-      sortBy = 'createdAt',
-      sortOrder = 'DESC',
-      maxAmount,
-      minAmount,
-      paymentMethod,
-      status,
-    } = query;
-    const take = pageSize;
-    const skip = (pageNumber - 1) * take;
-    const whereClause: Prisma.WithdrawRequestWhereInput = {
-      userId: teacherId,
-    };
-    if (minAmount !== undefined || maxAmount !== undefined) {
-      whereClause.amount = {};
 
-      if (minAmount !== undefined) {
-        whereClause.amount.gte = minAmount;
-      }
-
-      if (maxAmount !== undefined) {
-        whereClause.amount.lte = maxAmount;
-      }
-    }
-    if (paymentMethod) {
-      whereClause.paymentMethod = paymentMethod;
-    }
-    if (status) {
-      whereClause.status = status;
-    }
-    const [count, withdrawals] = await Promise.all([
-      this.prisma.withdrawRequest.count({
-        where: whereClause,
-      }),
-      this.prisma.withdrawRequest.findMany({
-        where: whereClause,
-        orderBy: {
-          [sortBy]: sortOrder.toLowerCase(),
-        },
-        select: {
-          id: true,
-          amount: true,
-          status: true,
-          createdAt: true,
-          paymentMethod: true,
-          adminNotes: true,
-          accountHolderName: true,
-        },
-        take,
-        skip,
-      }),
-    ]);
-    const totalPages = Math.ceil(count / take);
-    return {
-      withdrawals,
-      total: count,
-      totalPages,
-      pageNumber,
-      pageSize: take,
-    };
-  }
   async teacherInfoForUpdate(id: number) {
     const teacher = await this.prisma.teacher.findUnique({
       where: {
