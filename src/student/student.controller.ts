@@ -16,6 +16,7 @@ import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { CreateWithdrawRequestDto } from 'src/user/dto/create-withdraw-request.dto';
 import { GetStudentCoursesDto } from './dto/get-student-courses.dto';
 import { GetStudentInvoicesDto } from './dto/get-student-invoices.dto';
+import { GetStudentStatisticsDto } from './dto/get-student-statistics.dto';
 import { RechargeBalanceDto } from './dto/reacharge-balance.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { StudentService } from './student.service';
@@ -70,5 +71,14 @@ export class StudentController {
   @Get('my-invoices')
   getMyInvoices(@Req() req, @Query() query: GetStudentInvoicesDto) {
     return this.studentService.getMyInvoices(req.user.id, query);
+  }
+
+  @Get('get-statistics')
+  getStatistics(@Req() req, @Query() query: GetStudentStatisticsDto) {
+    return this.studentService.getStudentStatistics(
+      req.user.id,
+      query.startDate,
+      query.endDate,
+    );
   }
 }

@@ -153,9 +153,7 @@ export class StudentService {
     );
 
     return {
-      success: true,
-      message: 'تم إنشاء رابط شحن الرصيد بنجاح',
-      data: url.url,
+      url: url.url,
     };
   }
 
@@ -533,6 +531,356 @@ export class StudentService {
       totalPages,
       pageNumber,
       pageSize,
+    };
+  }
+  async getStudentStatistics(
+    studentId: number,
+    startDate?: Date | string,
+    endDate?: Date | string,
+  ) {
+    const end = endDate ? new Date(endDate) : new Date();
+    end.setHours(23, 59, 59, 999);
+
+    const start = startDate
+      ? new Date(startDate)
+      : new Date(new Date().setDate(end.getDate() - 30));
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new NotFoundException('Invalid date parameters');
+    }
+
+    const periodDuration = end.getTime() - start.getTime();
+    const prevStart = new Date(start.getTime() - periodDuration);
+
+    const calculateChange = (current: number, previous: number) => {
+      if (previous === 0) return current > 0 ? 100 : 0;
+      return Number((((current - previous) / previous) * 100).toFixed(2));
+    };
+
+    const createCard = (current: number, previous: number) => {
+      const change = calculateChange(current, previous);
+      let changeType: 'increase' | 'decrease' | 'neutral';
+      if (current > previous) {
+        changeType = 'increase';
+      } else if (current < previous) {
+        changeType = 'decrease';
+      } else {
+        changeType = 'neutral';
+      }
+      return {
+        value: Number(current.toFixed(2)),
+        change,
+        changeType,
+      };
+    };
+
+    const daysDiff = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+    const groupBy = daysDiff > 60 ? 'month' : 'day';
+
+    const formatDate = (date: Date) => {
+      if (groupBy === 'month') {
+        return date.toISOString().slice(0, 7);
+      }
+      return date.toISOString().slice(0, 10);
+    };
+
+    const studentCoursesWithLectures = await this.prisma.studentCourse.findMany(
+      {
+        where: { studentId, isActive: true },
+        select: {
+          course: {
+            select: {
+              CourseLecture: {
+                select: {
+                  lecture: {
+                    select: {
+                      id: true,
+                      LectureContent: {
+                        where: { contentType: 'VIDEO' },
+                        select: { id: true, duration: true },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    );
+
+    const lectureIds: number[] = [];
+    const videoContentIds: number[] = [];
+    const videoDurationMap = new Map<number, number>();
+
+    studentCoursesWithLectures.forEach((sc) => {
+      sc.course.CourseLecture.forEach((cl) => {
+        lectureIds.push(cl.lecture.id);
+        cl.lecture.LectureContent.forEach((lc) => {
+          videoContentIds.push(lc.id);
+          videoDurationMap.set(lc.id, lc.duration || 0);
+        });
+      });
+    });
+
+    const totalVideos = videoContentIds.length;
+
+    const [
+      allProgress,
+      currentCompletedProgress,
+      currentQuizAttempts,
+      currentTransactions,
+      prevCompletedProgress,
+      prevQuizAttempts,
+      weeklyCompletedVideos,
+      weeklyQuizAttempts,
+    ] = await Promise.all([
+      this.prisma.studentLectureProgress.findMany({
+        where: {
+          studentId,
+          lectureContentId: { in: videoContentIds },
+        },
+        select: { isCompleted: true },
+      }),
+
+      this.prisma.studentLectureProgress.findMany({
+        where: {
+          studentId,
+          lectureContentId: { in: videoContentIds },
+          isCompleted: true,
+          completedAt: { gte: start, lte: end },
+        },
+        select: { lectureContentId: true, completedAt: true },
+      }),
+
+      this.prisma.quizAttempt.findMany({
+        where: {
+          studentId,
+          quiz: { lectureId: { in: lectureIds } },
+          isCompleted: true,
+          completedAt: { gte: start, lte: end },
+        },
+        select: {
+          id: true,
+          score: true,
+          totalScore: true,
+          completedAt: true,
+          answers: {
+            select: { isCorrect: true },
+          },
+        },
+      }),
+
+      this.prisma.transaction.findMany({
+        where: {
+          studentId,
+          transactionType: 'ORDER',
+          transactionDate: { gte: start, lte: end },
+        },
+        select: { totalAmount: true, transactionDate: true },
+      }),
+
+      this.prisma.studentLectureProgress.findMany({
+        where: {
+          studentId,
+          lectureContentId: { in: videoContentIds },
+          isCompleted: true,
+          completedAt: { gte: prevStart, lt: start },
+        },
+        select: { lectureContentId: true },
+      }),
+
+      this.prisma.quizAttempt.findMany({
+        where: {
+          studentId,
+          quiz: { lectureId: { in: lectureIds } },
+          isCompleted: true,
+          completedAt: { gte: prevStart, lt: start },
+        },
+        select: { score: true, totalScore: true },
+      }),
+
+      this.prisma.studentLectureProgress.findMany({
+        where: {
+          studentId,
+          lectureContentId: { in: videoContentIds },
+          isCompleted: true,
+          completedAt: { gte: start, lte: end },
+        },
+        select: { completedAt: true },
+      }),
+
+      this.prisma.quizAttempt.findMany({
+        where: {
+          studentId,
+          quiz: { lectureId: { in: lectureIds } },
+          isCompleted: true,
+          completedAt: { gte: start, lte: end },
+        },
+        select: { completedAt: true },
+      }),
+    ]);
+
+    const currentQuizAnswers = currentQuizAttempts.flatMap((a) => a.answers);
+
+    const completedVideosCount = allProgress.filter(
+      (p) => p.isCompleted,
+    ).length;
+    const completionRate =
+      totalVideos > 0
+        ? Number(((completedVideosCount / totalVideos) * 100).toFixed(2))
+        : 0;
+
+    const prevCompletionRate =
+      totalVideos > 0
+        ? Number(
+            ((prevCompletedProgress.length / totalVideos) * 100).toFixed(2),
+          )
+        : 0;
+
+    const currentQuizSuccessRate =
+      currentQuizAttempts.length > 0
+        ? Number(
+            (
+              currentQuizAttempts.reduce(
+                (sum, q) =>
+                  sum +
+                  ((q.score?.toNumber() || 0) / q.totalScore.toNumber()) * 100,
+                0,
+              ) / currentQuizAttempts.length
+            ).toFixed(2),
+          )
+        : 0;
+
+    const prevQuizSuccessRate =
+      prevQuizAttempts.length > 0
+        ? Number(
+            (
+              prevQuizAttempts.reduce(
+                (sum, q) =>
+                  sum +
+                  ((q.score?.toNumber() || 0) / q.totalScore.toNumber()) * 100,
+                0,
+              ) / prevQuizAttempts.length
+            ).toFixed(2),
+          )
+        : 0;
+
+    const currentStudySeconds = currentCompletedProgress.reduce(
+      (sum, p) => sum + (videoDurationMap.get(p.lectureContentId) || 0),
+      0,
+    );
+    const currentStudyHours = Number((currentStudySeconds / 3600).toFixed(2));
+
+    const prevStudySeconds = prevCompletedProgress.reduce(
+      (sum, p) => sum + (videoDurationMap.get(p.lectureContentId) || 0),
+      0,
+    );
+    const prevStudyHours = Number((prevStudySeconds / 3600).toFixed(2));
+
+    const cards = {
+      totalVideos: createCard(totalVideos, totalVideos),
+      completionRate: createCard(completionRate, prevCompletionRate),
+      quizSuccessRate: createCard(currentQuizSuccessRate, prevQuizSuccessRate),
+      studyHours: createCard(currentStudyHours, prevStudyHours),
+    };
+
+    const videoProgress = [
+      { status: 'completed', count: completedVideosCount },
+      { status: 'notCompleted', count: totalVideos - completedVideosCount },
+    ];
+
+    const correctAnswers = currentQuizAnswers.filter(
+      (a) => a.isCorrect === true,
+    ).length;
+    const incorrectAnswers = currentQuizAnswers.filter(
+      (a) => a.isCorrect === false,
+    ).length;
+
+    const quizPerformance = [
+      { status: 'correct', count: correctAnswers },
+      { status: 'incorrect', count: incorrectAnswers },
+    ];
+
+    const pieCharts = {
+      videoProgress,
+      quizPerformance,
+    };
+
+    const dayNames = [
+      'السبت',
+      'الأحد',
+      'الاثنين',
+      'الثلاثاء',
+      'الأربعاء',
+      'الخميس',
+      'الجمعة',
+    ];
+
+    const weeklyData = dayNames.map((day) => ({
+      day,
+      completedVideos: 0,
+      quizzesTaken: 0,
+    }));
+
+    weeklyCompletedVideos.forEach((v) => {
+      if (v.completedAt) {
+        const dayIndex = (new Date(v.completedAt).getDay() + 1) % 7;
+        weeklyData[dayIndex].completedVideos += 1;
+      }
+    });
+
+    weeklyQuizAttempts.forEach((q) => {
+      if (q.completedAt) {
+        const dayIndex = (new Date(q.completedAt).getDay() + 1) % 7;
+        weeklyData[dayIndex].quizzesTaken += 1;
+      }
+    });
+
+    const areaChartDataMap = new Map<
+      string,
+      { date: string; spending: number }
+    >();
+
+    const currentDateIter = new Date(start);
+    while (currentDateIter <= end) {
+      const key = formatDate(currentDateIter);
+      if (!areaChartDataMap.has(key)) {
+        areaChartDataMap.set(key, { date: key, spending: 0 });
+      }
+      if (groupBy === 'month') {
+        currentDateIter.setMonth(currentDateIter.getMonth() + 1);
+      } else {
+        currentDateIter.setDate(currentDateIter.getDate() + 1);
+      }
+    }
+
+    let totalSpending = 0;
+    currentTransactions.forEach((t) => {
+      const amount = t.totalAmount.toNumber();
+      totalSpending += amount;
+      const key = formatDate(t.transactionDate);
+      const entry = areaChartDataMap.get(key);
+      if (entry) {
+        entry.spending += amount;
+      }
+    });
+
+    const areaChartData = Array.from(areaChartDataMap.values())
+      .map((entry) => ({
+        ...entry,
+        spending: Number(entry.spending.toFixed(2)),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      cards,
+      pieCharts,
+      barChart: weeklyData,
+      areaChart: {
+        data: areaChartData,
+        totalSpending: Number(totalSpending.toFixed(2)),
+      },
     };
   }
 }
