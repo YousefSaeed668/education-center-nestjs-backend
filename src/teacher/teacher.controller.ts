@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   Get,
+  Param,
+  ParseIntPipe,
   Put,
   Query,
   Req,
@@ -65,5 +67,11 @@ export class TeacherController {
   @Get('info-for-update')
   teacherInfoForUpdate(@Req() req) {
     return this.teacherService.teacherInfoForUpdate(req.user.id);
+  }
+
+  @Public()
+  @Get('teacher-info/:id')
+  getTeacherInfo(@Param('id', ParseIntPipe) id: number) {
+    return this.teacherService.getTeacherInfo(id);
   }
 }

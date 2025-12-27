@@ -849,4 +849,86 @@ export class TeacherService {
       divisions,
     };
   }
+  async getTeacherInfo(id: number) {
+    const teacher = await this.prisma.teacher.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        _count: {
+          select: {
+            courses: true,
+            book: true,
+          },
+        },
+        user: {
+          select: {
+            displayName: true,
+            profilePicture: true,
+            gender: true,
+          },
+        },
+        bio: true,
+        subject: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        socialMedia: true,
+        grade: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        educationType: {
+          select: {
+            name: true,
+            id: true,
+          },
+        },
+        division: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException('المعلم غير موجود');
+    }
+
+    const avgRating = await this.prisma.review.aggregate({
+      where: {
+        course: {
+          teacherId: id,
+        },
+      },
+      _avg: {
+        rating: true,
+      },
+      _count: {
+        rating: true,
+      },
+    });
+
+    const uniqueStudents = await this.prisma.studentCourse.groupBy({
+      by: ['studentId'],
+      where: {
+        course: {
+          teacherId: id,
+        },
+      },
+    });
+
+    return {
+      ...teacher,
+      averageRating: Number(avgRating._avg.rating?.toFixed(2)) || 0,
+      totalReviews: avgRating._count.rating || 0,
+      studentsCount: uniqueStudents.length,
+    };
+  }
 }

@@ -11,6 +11,135 @@ import { UpdateReviewDto } from './dto/update-review.dto';
 @Injectable()
 export class ReviewService {
   constructor(private prisma: PrismaService) {}
+
+  private readonly REVIEWS_PER_PAGE = 10;
+
+  private getReviewSelect() {
+    return {
+      id: true,
+      text: true,
+      rating: true,
+      createdAt: true,
+      student: {
+        select: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+              profilePicture: true,
+            },
+          },
+        },
+      },
+    };
+  }
+
+  async getReviews(courseId: number, cursor?: number) {
+    const limit = this.REVIEWS_PER_PAGE;
+
+    const totalCount = await this.prisma.review.count({
+      where: { courseId },
+    });
+
+    const reviews = await this.prisma.review.findMany({
+      where: { courseId },
+      select: this.getReviewSelect(),
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      ...(cursor && {
+        skip: 1,
+        cursor: { id: cursor },
+      }),
+    });
+
+    const hasMore = reviews.length > limit;
+    const data = hasMore ? reviews.slice(0, limit) : reviews;
+    const nextCursor = hasMore ? data[data.length - 1].id : null;
+
+    return {
+      data,
+      pagination: {
+        nextCursor,
+        hasMore,
+        totalCount,
+      },
+    };
+  }
+
+  async getReviewsForStudent(
+    courseId: number,
+    studentId: number,
+    cursor?: number,
+  ) {
+    const limit = this.REVIEWS_PER_PAGE;
+
+    const userReview = await this.prisma.review.findUnique({
+      where: {
+        studentId_courseId: { studentId, courseId },
+      },
+      select: this.getReviewSelect(),
+    });
+
+    const hasReviewed = !!userReview;
+
+    const totalCount = await this.prisma.review.count({
+      where: { courseId },
+    });
+
+    if (!cursor && userReview) {
+      const otherReviews = await this.prisma.review.findMany({
+        where: {
+          courseId,
+          studentId: { not: studentId },
+        },
+        select: this.getReviewSelect(),
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+      });
+
+      const hasMore = otherReviews.length >= limit;
+      const data = hasMore ? otherReviews.slice(0, limit - 1) : otherReviews;
+      const nextCursor = data.length > 0 ? data[data.length - 1].id : null;
+
+      return {
+        data: [userReview, ...data],
+        hasReviewed,
+        pagination: {
+          nextCursor,
+          hasMore,
+          totalCount,
+        },
+      };
+    }
+
+    const reviews = await this.prisma.review.findMany({
+      where: {
+        courseId,
+        ...(hasReviewed && { studentId: { not: studentId } }),
+      },
+      select: this.getReviewSelect(),
+      orderBy: { createdAt: 'desc' },
+      take: limit + 1,
+      ...(cursor && {
+        skip: 1,
+        cursor: { id: cursor },
+      }),
+    });
+
+    const hasMore = reviews.length > limit;
+    const data = hasMore ? reviews.slice(0, limit) : reviews;
+    const nextCursor = hasMore ? data[data.length - 1].id : null;
+
+    return {
+      data,
+      hasReviewed,
+      pagination: {
+        nextCursor,
+        hasMore,
+        totalCount,
+      },
+    };
+  }
   async addReview(studentId: number, courseId: number, body: AddReviewDto) {
     await this.validateStudentCourseAccess(studentId, courseId);
 
