@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { ProductType } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import { UserType } from './dto/get-signup-data.dto';
 
@@ -49,22 +50,36 @@ export class LookupService {
     }
   }
 
-  async getCoursesData() {
-    const [subjects, grades, courseCount, teacherCount, studentCount] =
-      await Promise.all([
-        this.prisma.subject.findMany(),
-        this.prisma.grade.findMany(),
-        this.prisma.course.count(),
-        this.prisma.teacher.count(),
-        this.prisma.student.count(),
-      ]);
+  async getProductsData(productType: ProductType) {
+    const productCountPromise =
+      productType === ProductType.COURSE
+        ? this.prisma.course.count()
+        : this.prisma.book.count();
+
+    const [
+      subjects,
+      grades,
+      divisions,
+      productCount,
+      teacherCount,
+      studentCount,
+    ] = await Promise.all([
+      this.prisma.subject.findMany(),
+      this.prisma.grade.findMany(),
+      this.prisma.division.findMany(),
+      productCountPromise,
+      this.prisma.teacher.count(),
+      this.prisma.student.count(),
+    ]);
+
     return {
       filters: {
         subjects,
         grades,
+        divisions,
       },
-      coursePageStats: {
-        courseCount,
+      productPageStats: {
+        productCount,
         teacherCount,
         studentCount,
       },

@@ -467,6 +467,7 @@ WITH course_base AS (
     c.description, 
     c.price,
     c."courseFeatures",
+    c."gradeId",
     t.id as teacher_id,
     u."displayName" as "teacherName",
     u."profilePicture" as "teacherProfilePicture",
@@ -506,6 +507,22 @@ teacher_stats AS (
     LEFT JOIN "StudentCourse" sc2 ON c2.id = sc2."courseId"
   WHERE c.id = ${id}
   GROUP BY c."teacherId"
+),
+
+course_divisions AS (
+  SELECT 
+    c.id as course_id,
+    jsonb_agg(
+      jsonb_build_object(
+        'id', d.id,
+        'name', d.name
+      ) ORDER BY d.name
+    ) as divisions
+  FROM "Course" c
+  INNER JOIN "_CourseToDivision" cd ON c.id = cd."A"
+  INNER JOIN "Division" d ON cd."B" = d.id
+  WHERE c.id = ${id}
+  GROUP BY c.id
 )
 
 SELECT 
@@ -515,6 +532,11 @@ SELECT
   cb.description,
   cb.price,
   cb."courseFeatures",
+  jsonb_build_object(
+    'id', cb."gradeId",
+    'name', g.name
+  ) as grade,
+  COALESCE(cd.divisions, '[]'::jsonb) as divisions,
   jsonb_build_object(
     'id', cb.teacher_id,
     'teacherName', cb."teacherName",
@@ -531,7 +553,9 @@ SELECT
   cs.quizzes_count as "quizzesCount"
 FROM course_base cb
   CROSS JOIN course_stats cs
-  LEFT JOIN teacher_stats ts ON cb.course_id = cs.course_id;
+  LEFT JOIN teacher_stats ts ON cb.course_id = cs.course_id
+  INNER JOIN "Grade" g ON cb."gradeId" = g.id
+  LEFT JOIN course_divisions cd ON cb.course_id = cd.course_id;
 `;
     if (course.length === 0) {
       throw new NotFoundException('الدورة غير موجودة');

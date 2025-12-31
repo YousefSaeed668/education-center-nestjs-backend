@@ -9,8 +9,11 @@ model Book {
   updatedAt    DateTime   @updatedAt
   gradeId      Int
   bookFeatures String[]
+  subjectId    Int
+  subject      Subject    @relation(fields: [subjectId], references: [id])
   grade        Grade      @relation(fields: [gradeId], references: [id])
   teacher      Teacher    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   CartItem     CartItem[]
   Division     Division[]
+  reviews      Review[]
 }

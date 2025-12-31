@@ -120,7 +120,7 @@ export interface Lecture {
   formattedDuration: string;
 }
 
-export interface CourseRowTeacher {
+export interface TeacherRow {
   id: number;
   teacherName: string;
   teacherProfilePicture: string;
@@ -130,17 +130,25 @@ export interface CourseRowTeacher {
   teacherTotalStudents: number;
   teacherTotalCourses: number;
 }
+export interface GradeInfo {
+  id: number;
+  name: string;
+}
 
+export interface DivisionInfo {
+  id: number;
+  name: string;
+}
 export interface CourseRow {
   courseName: string;
   description: string;
   price: number;
   courseFeatures: string[];
-  teacher: CourseRowTeacher;
-  owned: boolean;
+  teacher: TeacherRow;
   courseRating: number;
   studentsCount: number;
   lecturesCount: number;
   quizzesCount: number;
-  lectures: Lecture[];
+  grade: GradeInfo;
+  divisions: DivisionInfo[];
 }

@@ -43,12 +43,7 @@ async function bootstrap() {
       },
     }),
   );
-  app.enableCors({
-    origin: ['http://localhost:3000'],
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type, Accept, Authorization, refresh',
-    credentials: true,
-  });
+
   app.useGlobalFilters(new PrismaExceptionFilter(), new AllExceptionsFilter());
   app.useGlobalInterceptors(new ResponseInterceptor());
 

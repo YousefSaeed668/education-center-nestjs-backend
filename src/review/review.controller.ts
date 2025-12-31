@@ -10,7 +10,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { ProductType, Role } from '@prisma/client';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { AddReviewDto } from './dto/add-review.dto';
@@ -22,22 +22,32 @@ export class ReviewController {
   constructor(private readonly reviewService: ReviewService) {}
 
   @Public()
-  @Get('/:id')
-  getReviewsPublic(
+  @Get('/course/:id')
+  getCourseReviewsPublic(
     @Param('id', ParseIntPipe) courseId: number,
     @Query('cursor', new ParseIntPipe({ optional: true })) cursor?: number,
   ) {
-    return this.reviewService.getReviews(courseId, cursor);
+    return this.reviewService.getReviews(ProductType.COURSE, courseId, cursor);
+  }
+
+  @Public()
+  @Get('/book/:id')
+  getBookReviewsPublic(
+    @Param('id', ParseIntPipe) bookId: number,
+    @Query('cursor', new ParseIntPipe({ optional: true })) cursor?: number,
+  ) {
+    return this.reviewService.getReviews(ProductType.BOOK, bookId, cursor);
   }
 
   @Roles(Role.STUDENT)
-  @Get('/student/:id')
-  getReviewsForStudent(
+  @Get('/student/course/:id')
+  getCourseReviewsForStudent(
     @Req() req,
     @Param('id', ParseIntPipe) courseId: number,
     @Query('cursor', new ParseIntPipe({ optional: true })) cursor?: number,
   ) {
     return this.reviewService.getReviewsForStudent(
+      ProductType.COURSE,
       courseId,
       req.user.id,
       cursor,
@@ -45,13 +55,28 @@ export class ReviewController {
   }
 
   @Roles(Role.STUDENT)
-  @Post('add/:courseId')
+  @Get('/student/book/:id')
+  getBookReviewsForStudent(
+    @Req() req,
+    @Param('id', ParseIntPipe) bookId: number,
+    @Query('cursor', new ParseIntPipe({ optional: true })) cursor?: number,
+  ) {
+    return this.reviewService.getReviewsForStudent(
+      ProductType.BOOK,
+      bookId,
+      req.user.id,
+      cursor,
+    );
+  }
+
+  @Roles(Role.STUDENT)
+  @Post('add/:productId')
   addReview(
     @Req() req,
-    @Param('courseId', ParseIntPipe) courseId: number,
+    @Param('productId', ParseIntPipe) productId: number,
     @Body() body: AddReviewDto,
   ) {
-    return this.reviewService.addReview(req.user.id, courseId, body);
+    return this.reviewService.addReview(req.user.id, productId, body);
   }
 
   @Roles(Role.STUDENT)

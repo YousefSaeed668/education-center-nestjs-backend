@@ -193,8 +193,8 @@ model Teacher {
   grade           Grade[]       @relation("GradeToTeacher")
   Quiz            Quiz[]
   transactions    Transaction[]
-  subject         Subject?      @relation(fields: [subjectId], references: [id])
-  subjectId       Int?
+  subjectId       Int
+  subject         Subject      @relation(fields: [subjectId], references: [id])
   Comment         Comment[]
 }
 
@@ -203,6 +203,7 @@ model Subject {
   name    String
   teacher Teacher[]
   Course  Course[]
+  books   Book[]
 
   @@unique([name])
 }

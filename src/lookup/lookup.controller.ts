@@ -1,4 +1,5 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, ParseEnumPipe } from '@nestjs/common';
+import { ProductType } from '@prisma/client';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { GetSignUpDataDto } from './dto/get-signup-data.dto';
 import { LookupService } from './lookup.service';
@@ -12,9 +13,12 @@ export class LookupController {
     return this.lookupService.getSignUpData(params.userType);
   }
 
-  @Get('courses')
-  getCoursesData() {
-    return this.lookupService.getCoursesData();
+  @Get('products/:productType')
+  getProductsData(
+    @Param('productType', new ParseEnumPipe(ProductType))
+    productType: ProductType,
+  ) {
+    return this.lookupService.getProductsData(productType);
   }
 
   @Get('teachers')

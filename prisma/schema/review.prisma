@@ -25,8 +25,15 @@ model Review {
   studentId Int
   student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
-  courseId Int
-  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  productType ProductType
+  productId   Int
 
-  @@unique([studentId, courseId])
+  courseId Int?
+  course   Course? @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  bookId Int?
+  book   Book? @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, productType, productId])
+  @@index([productType, productId])
 }

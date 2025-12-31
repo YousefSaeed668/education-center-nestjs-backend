@@ -19,6 +19,7 @@ import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { BookService } from './book.service';
 import { CreateBookDto } from './dto/create-book-dto';
+import { GetBooksDto } from './dto/get-books.dto';
 import { GetTeacherBooksDto } from './dto/get-teacher-books.dto';
 import { UpdateBookDto } from './dto/update-book-dto';
 
@@ -26,6 +27,11 @@ import { UpdateBookDto } from './dto/update-book-dto';
 export class BookController {
   constructor(private readonly bookService: BookService) {}
 
+  @Roles(Role.TEACHER, Role.STUDENT)
+  @Get(`get-ownership-status/:id`)
+  getOwnershipStatus(@Req() req, @Param('id', ParseIntPipe) id: number) {
+    return this.bookService.getOwnershipStatus(req.user.id, id);
+  }
   @Roles(Role.TEACHER)
   @UseInterceptors(FileInterceptor('thumbnail'))
   @Post('create-book')
@@ -86,8 +92,24 @@ export class BookController {
     return this.bookService.getBooksByTeacher(req.user.id);
   }
   @Public()
-  @Get(':bookId')
-  getBookById(@Param('bookId', ParseIntPipe) bookId: number) {
-    return this.bookService.getBookById(bookId);
+  @Get('/ids/all-books')
+  getAllBooksIds() {
+    return this.bookService.getAllBooksIds();
+  }
+  @Public()
+  @Get('all-books')
+  getAllBooks(@Query() query: GetBooksDto) {
+    return this.bookService.getBooks(query);
+  }
+  @Public()
+  @Get(':id')
+  getBook(@Param('id', ParseIntPipe) id: number) {
+    return this.bookService.getBook(id);
+  }
+
+  @Public()
+  @Get('related-books/:id')
+  getRelatedBooks(@Param('id', ParseIntPipe) id: number) {
+    return this.bookService.getRelatedBooks(id);
   }
 }

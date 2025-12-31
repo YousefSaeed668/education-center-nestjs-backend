@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ProductType } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
 import { AddReviewDto } from './dto/add-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
@@ -20,6 +21,8 @@ export class ReviewService {
       text: true,
       rating: true,
       createdAt: true,
+      productType: true,
+      productId: true,
       student: {
         select: {
           user: {
@@ -34,15 +37,19 @@ export class ReviewService {
     };
   }
 
-  async getReviews(courseId: number, cursor?: number) {
+  async getReviews(
+    productType: ProductType,
+    productId: number,
+    cursor?: number,
+  ) {
     const limit = this.REVIEWS_PER_PAGE;
 
     const totalCount = await this.prisma.review.count({
-      where: { courseId },
+      where: { productType, productId },
     });
 
     const reviews = await this.prisma.review.findMany({
-      where: { courseId },
+      where: { productType, productId },
       select: this.getReviewSelect(),
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
@@ -67,7 +74,8 @@ export class ReviewService {
   }
 
   async getReviewsForStudent(
-    courseId: number,
+    productType: ProductType,
+    productId: number,
     studentId: number,
     cursor?: number,
   ) {
@@ -75,7 +83,11 @@ export class ReviewService {
 
     const userReview = await this.prisma.review.findUnique({
       where: {
-        studentId_courseId: { studentId, courseId },
+        studentId_productType_productId: {
+          studentId,
+          productType,
+          productId,
+        },
       },
       select: this.getReviewSelect(),
     });
@@ -83,13 +95,14 @@ export class ReviewService {
     const hasReviewed = !!userReview;
 
     const totalCount = await this.prisma.review.count({
-      where: { courseId },
+      where: { productType, productId },
     });
 
     if (!cursor && userReview) {
       const otherReviews = await this.prisma.review.findMany({
         where: {
-          courseId,
+          productType,
+          productId,
           studentId: { not: studentId },
         },
         select: this.getReviewSelect(),
@@ -114,7 +127,8 @@ export class ReviewService {
 
     const reviews = await this.prisma.review.findMany({
       where: {
-        courseId,
+        productType,
+        productId,
         ...(hasReviewed && { studentId: { not: studentId } }),
       },
       select: this.getReviewSelect(),
@@ -140,26 +154,48 @@ export class ReviewService {
       },
     };
   }
-  async addReview(studentId: number, courseId: number, body: AddReviewDto) {
-    await this.validateStudentCourseAccess(studentId, courseId);
+
+  async addReview(studentId: number, productId: number, body: AddReviewDto) {
+    await this.validateStudentProductAccess(
+      studentId,
+      productId,
+      body.productType,
+    );
 
     const existingReview = await this.prisma.review.findUnique({
       where: {
-        studentId_courseId: { studentId, courseId },
+        studentId_productType_productId: {
+          studentId,
+          productType: body.productType,
+          productId,
+        },
       },
     });
 
     if (existingReview) {
-      throw new ConflictException('لقد قمت بتقييم هذا الكورس من قبل');
+      throw new ConflictException(
+        body.productType === ProductType.COURSE
+          ? 'لقد قمت بتقييم هذا الكورس من قبل'
+          : 'لقد قمت بتقييم هذا الكتاب من قبل',
+      );
+    }
+
+    const reviewData: any = {
+      text: body.text,
+      rating: body.rating,
+      studentId,
+      productType: body.productType,
+      productId,
+    };
+
+    if (body.productType === ProductType.COURSE) {
+      reviewData.courseId = productId;
+    } else {
+      reviewData.bookId = productId;
     }
 
     return this.prisma.review.create({
-      data: {
-        text: body.text,
-        rating: body.rating,
-        studentId,
-        courseId,
-      },
+      data: reviewData,
       include: {
         student: {
           select: {
@@ -171,15 +207,27 @@ export class ReviewService {
             },
           },
         },
-        course: {
-          select: {
-            id: true,
-            courseName: true,
-          },
-        },
+        ...(body.productType === ProductType.COURSE
+          ? {
+              course: {
+                select: {
+                  id: true,
+                  courseName: true,
+                },
+              },
+            }
+          : {
+              book: {
+                select: {
+                  id: true,
+                  bookName: true,
+                },
+              },
+            }),
       },
     });
   }
+
   async updateReview(
     studentId: number,
     reviewId: number,
@@ -189,6 +237,7 @@ export class ReviewService {
       where: { id: reviewId },
       include: {
         course: true,
+        book: true,
       },
     });
 
@@ -200,7 +249,11 @@ export class ReviewService {
       throw new ForbiddenException('ليس لديك صلاحية لتعديل هذا التقييم');
     }
 
-    await this.validateStudentCourseAccess(studentId, review.courseId);
+    await this.validateStudentProductAccess(
+      studentId,
+      review.productId,
+      review.productType,
+    );
 
     return this.prisma.review.update({
       where: { id: reviewId },
@@ -219,15 +272,27 @@ export class ReviewService {
             },
           },
         },
-        course: {
-          select: {
-            id: true,
-            courseName: true,
-          },
-        },
+        ...(review.productType === ProductType.COURSE
+          ? {
+              course: {
+                select: {
+                  id: true,
+                  courseName: true,
+                },
+              },
+            }
+          : {
+              book: {
+                select: {
+                  id: true,
+                  bookName: true,
+                },
+              },
+            }),
       },
     });
   }
+
   async deleteReview(studentId: number, reviewId: number) {
     const review = await this.prisma.review.findUnique({
       where: { id: reviewId },
@@ -247,18 +312,38 @@ export class ReviewService {
 
     return { message: 'تم حذف التقييم بنجاح' };
   }
-  private async validateStudentCourseAccess(
-    studentId: number,
-    courseId: number,
-  ) {
-    const enrollment = await this.prisma.studentCourse.findUnique({
-      where: {
-        studentId_courseId: { studentId, courseId },
-      },
-    });
 
-    if (!enrollment) {
-      throw new ForbiddenException('الطالب لا يملك هذا الكورس');
+  private async validateStudentProductAccess(
+    studentId: number,
+    productId: number,
+    productType: ProductType,
+  ) {
+    if (productType === ProductType.COURSE) {
+      const enrollment = await this.prisma.studentCourse.findUnique({
+        where: {
+          studentId_courseId: { studentId, courseId: productId },
+        },
+      });
+
+      if (!enrollment) {
+        throw new ForbiddenException('الطالب لا يملك هذا الكورس');
+      }
+    } else if (productType === ProductType.BOOK) {
+      // Check if student has purchased this book
+      const bookPurchase = await this.prisma.orderItem.findFirst({
+        where: {
+          productId: productId,
+          productType: 'BOOK',
+          order: {
+            studentId: studentId,
+            status: 'COMPLETED',
+          },
+        },
+      });
+
+      if (!bookPurchase) {
+        throw new ForbiddenException('الطالب لا يملك هذا الكتاب');
+      }
     }
   }
 }

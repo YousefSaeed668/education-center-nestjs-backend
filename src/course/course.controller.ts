@@ -102,7 +102,7 @@ export class CourseController {
     return this.courseService.getOwnershipStatus(id, req.user.id);
   }
   @Public()
-  @Get('relatedCourses/:id')
+  @Get('related-courses/:id')
   getRelatedCourses(@Param('id', ParseIntPipe) id: number) {
     return this.courseService.getRelatedCourses(id);
   }
