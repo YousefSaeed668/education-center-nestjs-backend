@@ -119,6 +119,8 @@ export class OrderService {
       throw new NotFoundException('الطالب غير موجود');
     }
 
+    await this.validateCartCourses(studentId, cart.cartItems);
+
     const hasBooks = cart.cartItems.some((item) => item.productType === 'BOOK');
     const finalAddressId = await this.validateAndSetAddress(
       studentId,
@@ -170,7 +172,39 @@ export class OrderService {
 
     return url;
   }
+  private async validateCartCourses(studentId: number, cartItems: any[]) {
+    const courseIds = cartItems
+      .filter((item) => item.productType === 'COURSE')
+      .map((item) => item.productId);
 
+    if (courseIds.length === 0) {
+      return;
+    }
+
+    const purchasedCourses = await this.prisma.studentCourse.findMany({
+      where: {
+        studentId: studentId,
+        courseId: { in: courseIds },
+      },
+      select: {
+        courseId: true,
+        course: {
+          select: {
+            courseName: true,
+          },
+        },
+      },
+    });
+
+    if (purchasedCourses.length > 0) {
+      const courseNames = purchasedCourses
+        .map((sc) => sc.course.courseName)
+        .join('، ');
+      throw new BadRequestException(
+        `لقد قمت بشراء الكورس التالي بالفعل: ${courseNames}. يرجى إزالته من العربة`,
+      );
+    }
+  }
   private async processBalanceCartPayment(
     studentId: number,
     cart: any,
