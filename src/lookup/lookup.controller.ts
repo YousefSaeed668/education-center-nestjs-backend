@@ -30,4 +30,9 @@ export class LookupController {
   getLocationData() {
     return this.lookupService.getLocationData();
   }
+
+  @Get('home-page')
+  getHomePageData() {
+    return this.lookupService.getHomePageData();
+  }
 }
