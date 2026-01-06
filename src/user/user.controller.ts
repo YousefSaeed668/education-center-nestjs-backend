@@ -9,6 +9,11 @@ import { UserService } from './user.service';
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
+  @Roles(Role.ADMIN, Role.TEACHER, Role.GUARDIAN, Role.STUDENT)
+  @Get('/get-authenticated-user-data')
+  getAuthenticatedUserData(@Req() req) {
+    return this.userService.getAuthenticatedUserData(req.user.id);
+  }
   @Roles(Role.TEACHER, Role.STUDENT)
   @Post('withdrawal-request')
   withdrawalRequest(@Req() req, @Body() body: CreateWithdrawRequestDto) {

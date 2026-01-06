@@ -288,22 +288,12 @@ export class AuthService {
     }
     return {
       id: user.id,
-      displayName: user.displayName,
       userName: user.userName,
       role: user.role,
-      balance: user.balance,
-      profilePicture: user.profilePicture,
     };
   }
 
-  async login(
-    userId: number,
-    displayName: string,
-    userName: string,
-    role: Role,
-    balance: number,
-    profilePicture: string | null,
-  ) {
+  async login(userId: number, userName: string, role: Role) {
     const { accessToken, refreshToken } = await this.generateTokens(userId);
     const hashedRt = await bcrypt.hash(refreshToken, 10);
     await this.userService.updateHashedRefreshToken(userId, hashedRt);
@@ -312,11 +302,8 @@ export class AuthService {
       refreshToken,
       user: {
         id: userId,
-        displayName,
         userName,
         role,
-        balance,
-        profilePicture,
       },
     };
   }

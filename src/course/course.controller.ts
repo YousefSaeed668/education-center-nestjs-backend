@@ -115,7 +115,7 @@ export class CourseController {
     return this.courseService.getCourseDataForUpdate(req.user.id, courseId);
   }
 
-  @Roles(Role.STUDENT)
+  @Roles(Role.STUDENT, Role.TEACHER)
   @Get('generate-lectureContent-url/:lectureContentId/:courseId')
   generateLectureContentUrl(
     @Param('lectureContentId', ParseIntPipe) lectureContentId: number,
@@ -126,6 +126,7 @@ export class CourseController {
       lectureContentId,
       courseId,
       req.user.id,
+      req.user.role,
     );
   }
   @Roles(Role.STUDENT)

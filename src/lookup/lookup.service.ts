@@ -230,7 +230,11 @@ export class LookupService {
       ),
       
       hero_random_subjects AS (
-        SELECT id, name FROM "Subject" ORDER BY RANDOM() LIMIT 4
+        SELECT id, name 
+        FROM "Subject" 
+        WHERE random() < 0.5
+        ORDER BY random()
+        LIMIT 4
       ),
       
       subjects_section AS (
@@ -240,19 +244,27 @@ export class LookupService {
           COALESCE(COUNT(DISTINCT cl."lectureId"), 0)::int as "numberOfLectures",
           ROUND(COALESCE(SUM(lc.duration), 0)::numeric / 3600, 2)::float as "numberOfHours",
           ROUND(COALESCE(AVG(r.rating), 0)::numeric, 2)::float as "avgRating"
-        FROM "Subject" s
+        FROM (
+          SELECT id, name 
+          FROM "Subject"
+          WHERE random() < 0.5
+          ORDER BY random()
+          LIMIT 4
+        ) s
         LEFT JOIN "Course" c ON c."subjectId" = s.id
         LEFT JOIN "CourseLecture" cl ON cl."courseId" = c.id
         LEFT JOIN "Lecture" l ON l.id = cl."lectureId"
         LEFT JOIN "LectureContent" lc ON lc."lectureId" = l.id
         LEFT JOIN "Review" r ON r."courseId" = c.id
         GROUP BY s.id, s.name
-        ORDER BY RANDOM() 
-        LIMIT 4
       ),
       
       teacher_random_subjects AS (
-        SELECT id, name FROM "Subject" ORDER BY RANDOM() LIMIT 4
+        SELECT id, name 
+        FROM "Subject"
+        WHERE random() < 0.5
+        ORDER BY random()
+        LIMIT 4
       ),
       
       teacher_stats AS (
@@ -268,7 +280,7 @@ export class LookupService {
           COUNT(DISTINCT c.id)::int as "numberOfCourses",
           COUNT(DISTINCT b.id)::int as "numberOfBooks",
           COUNT(DISTINCT sc."studentId")::int as "numberOfStudents",
-          ROW_NUMBER() OVER (PARTITION BY t."subjectId" ORDER BY RANDOM()) as rn
+          ROW_NUMBER() OVER (PARTITION BY t."subjectId" ORDER BY random()) as rn
         FROM "Teacher" t
         INNER JOIN "User" u ON t.id = u.id
         INNER JOIN teacher_random_subjects rs ON t."subjectId" = rs.id
@@ -276,7 +288,7 @@ export class LookupService {
         LEFT JOIN "Review" r ON r."courseId" = c.id
         LEFT JOIN "Book" b ON b."teacherId" = t.id
         LEFT JOIN "StudentCourse" sc ON sc."courseId" = c.id AND sc."isActive" = true
-        WHERE t."isActive" = true
+        WHERE t."isActive" = true AND random() < 0.5
         GROUP BY t.id, t."subjectId", rs.name, u."profilePicture", u."displayName", t.bio, u.gender
       ),
       
@@ -439,7 +451,8 @@ export class LookupService {
         LEFT JOIN "Subject" s ON b."subjectId" = s.id
         LEFT JOIN book_review_stats brs ON b.id = brs."bookId"
         LEFT JOIN book_order_count boc ON b.id = boc."productId"
-        ORDER BY RANDOM()
+        WHERE random() < 0.5
+        ORDER BY random()
         LIMIT 6
       ),
       

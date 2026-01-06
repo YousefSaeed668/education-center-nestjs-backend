@@ -193,4 +193,17 @@ export class UserService {
       pageSize: take,
     };
   }
+
+  async getAuthenticatedUserData(id: number) {
+    return await this.prisma.user.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        profilePicture: true,
+        displayName: true,
+        balance: true,
+      },
+    });
+  }
 }

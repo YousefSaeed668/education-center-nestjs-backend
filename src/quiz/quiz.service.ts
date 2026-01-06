@@ -299,7 +299,7 @@ export class QuizService {
       return this.getQuizByIdForTeacher(userId, quizId);
     } else if (userRole === Role.STUDENT) {
       if (!courseId) {
-        throw new BadRequestException('courseId is required for students');
+        throw new BadRequestException('معرف الكورس مطلوب ');
       }
       return this.getQuizByIdForStudent(userId, quizId, courseId);
     }

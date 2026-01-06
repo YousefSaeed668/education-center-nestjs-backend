@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ContentType, Prisma } from '@prisma/client';
+import { ContentType, Prisma, Role } from '@prisma/client';
 import * as ffmpeg from 'fluent-ffmpeg';
 import { HandleFiles } from 'src/common/services/handleFiles.service';
 import { ImageService } from 'src/common/services/image.service';
@@ -1202,40 +1202,48 @@ ORDER BY cl."orderIndex";
   async generateLectureContentUrl(
     id: number,
     courseId: number,
-    studentId: number,
+    userId: number,
+    role: Role,
   ) {
-    const isOwned = await this.getOwnershipStatus(courseId, studentId);
-    if (!isOwned) {
-      throw new ForbiddenException('برجاء شراء الكورس اولا');
-    }
-    const lectureContent = await this.prisma.lectureContent.findFirst({
-      where: {
-        id,
-        lecture: {
-          CourseLecture: {
-            some: {
-              courseId: courseId,
+    try {
+      const isOwned = await this.getOwnershipStatus(courseId, userId);
+      if (!isOwned) {
+        throw new ForbiddenException('برجاء شراء الكورس اولا');
+      }
+      const lectureContent = await this.prisma.lectureContent.findFirst({
+        where: {
+          id,
+          lecture: {
+            CourseLecture: {
+              some: {
+                courseId: courseId,
+              },
             },
           },
         },
-      },
-      select: {
-        contentKey: true,
-        contentType: true,
-      },
-    });
-    if (!lectureContent) {
-      throw new NotFoundException('الدرس غير موجود');
-    }
+        select: {
+          contentKey: true,
+          contentType: true,
+        },
+      });
+      if (!lectureContent) {
+        throw new NotFoundException('الدرس غير موجود');
+      }
 
-    if (lectureContent.contentType === ContentType.FILE) {
-      await this.markLectureContentAsCompletedInternal(studentId, id);
-    }
+      if (
+        lectureContent.contentType === ContentType.FILE &&
+        role === Role.STUDENT
+      ) {
+        await this.markLectureContentAsCompletedInternal(userId, id);
+      }
 
-    const { url } = await this.s3Service.getPresignedSignedUrl(
-      lectureContent.contentKey,
-    );
-    return { url };
+      const { url } = await this.s3Service.getPresignedSignedUrl(
+        lectureContent.contentKey,
+      );
+      return { url };
+    } catch (error) {
+      console.log(error);
+    }
   }
 
   async markLectureContentAsCompleted(

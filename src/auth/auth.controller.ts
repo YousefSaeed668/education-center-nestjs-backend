@@ -81,10 +81,7 @@ export class AuthController {
     return this.authService.login(
       req.user.id,
       req.user.displayName,
-      req.user.userName,
       req.user.role,
-      req.user.balance,
-      req.user.profilePicture,
     );
   }
 
