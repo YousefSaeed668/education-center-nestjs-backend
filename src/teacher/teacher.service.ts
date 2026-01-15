@@ -659,10 +659,12 @@ export class TeacherService {
 
     return {
       cards,
-      areaChart,
-      barChart: topCoursesBarChart,
-      pieChart,
-      lineChart,
+      charts: {
+        areaChart,
+        barChart: topCoursesBarChart,
+        pieChart,
+        lineChart,
+      },
     };
   }
 

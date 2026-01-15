@@ -875,11 +875,13 @@ export class StudentService {
 
     return {
       cards,
-      pieCharts,
-      barChart: weeklyData,
-      areaChart: {
-        data: areaChartData,
-        totalSpending: Number(totalSpending.toFixed(2)),
+      charts: {
+        pieCharts,
+        barChart: weeklyData,
+        areaChart: {
+          data: areaChartData,
+          totalSpending: Number(totalSpending.toFixed(2)),
+        },
       },
     };
   }

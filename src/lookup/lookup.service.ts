@@ -123,7 +123,6 @@ export class LookupService {
   }
 
   async getHomePageData() {
-    // Single consolidated query using CTEs for all home page data
     const result = await this.prisma.$queryRaw<
       {
         heroSection: {

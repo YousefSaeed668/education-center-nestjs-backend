@@ -9,30 +9,25 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
-import { AdminService } from './admin.service';
-import { ProcessWithdrawRequestDto } from './dto/process-withdraw-request.dto';
-import { Roles } from 'src/auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
-import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
+import { Roles } from 'src/auth/decorators/roles.decorator';
 import { GetAllUsersDto } from '../user/dto/get-all-users.dto';
-import { GetFinancialStatisticsDto } from './dto/get-financial-statistics.dto';
+import { AdminService } from './admin.service';
+import { GetDashboardStatisticsDto } from './dto/get-dashboard-statistics.dto';
+import { ProcessWithdrawRequestDto } from './dto/process-withdraw-request.dto';
+import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
 
 @Controller('admin')
 @Roles(Role.ADMIN)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
-  @Get('stats')
-  getDashboardStats() {
-    return this.adminService.getDashboardStats();
-  }
-
-  @Get('financial-statistics')
-  getFinancialStatistics(@Query() query: GetFinancialStatisticsDto) {
-    return this.adminService.getFinancialStatistics(
-      query.startDate,
-      query.endDate,
-    );
+  @Get('dashboard-stats')
+  getDashboardStatistics(@Query() query: GetDashboardStatisticsDto) {
+    const endDate = query.endDate || new Date();
+    const startDate =
+      query.startDate || new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return this.adminService.getDashboardStatistics(startDate, endDate);
   }
 
   @Patch('/withdraw-requests/:id/approve')

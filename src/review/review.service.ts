@@ -329,7 +329,6 @@ export class ReviewService {
         throw new ForbiddenException('الطالب لا يملك هذا الكورس');
       }
     } else if (productType === ProductType.BOOK) {
-      // Check if student has purchased this book
       const bookPurchase = await this.prisma.orderItem.findFirst({
         where: {
           productId: productId,

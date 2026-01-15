@@ -4,10 +4,20 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
-import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
-import { ProcessWithdrawRequestDto } from './dto/process-withdraw-request.dto';
-import { GetAllUsersDto } from '../user/dto/get-all-users.dto';
 import { UserService } from 'src/user/user.service';
+import { GetAllUsersDto } from '../user/dto/get-all-users.dto';
+import {
+  DashboardCardType,
+  GrowthLineChartItem,
+  OrdersStatusChartItem,
+  RevenueChartItem,
+  RevenuePieChartItem,
+  TeacherPerformanceChartItem,
+  TopContentChartItem,
+  WithdrawalsChartItem,
+} from './dto/get-dashboard-statistics.dto';
+import { ProcessWithdrawRequestDto } from './dto/process-withdraw-request.dto';
+import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
 
 @Injectable()
 export class AdminService {
@@ -16,167 +26,614 @@ export class AdminService {
     private readonly userService: UserService,
   ) {}
 
-  async getDashboardStats() {
-    const teachers = await this.prisma.user.count({
-      where: { role: 'TEACHER' },
-    });
-    const students = await this.prisma.user.count({
-      where: { role: 'STUDENT' },
-    });
-    const guardians = await this.prisma.user.count({
-      where: { role: 'GUARDIAN' },
-    });
-    const courses = await this.prisma.course.count();
-    const books = await this.prisma.book.count();
-
-    return {
-      teachers,
-      students,
-      guardians,
-      courses,
-      books,
-    };
-  }
-
-  async getFinancialStatistics(startDate?: Date, endDate?: Date) {
-    if (startDate && endDate && startDate > endDate) {
+  async getDashboardStatistics(startDate: Date, endDate: Date) {
+    if (startDate > endDate) {
       throw new BadRequestException(
         'تاريخ البدء يجب ان يكون قبل تاريخ الانتهاء',
       );
     }
-    const whereClause =
-      startDate && endDate
-        ? {
-            transactionDate: {
-              gte: startDate,
-              lte: endDate,
-            },
-          }
-        : {};
 
-    const transactions = await this.prisma.transaction.findMany({
-      where: whereClause,
-      select: {
-        transactionType: true,
-        totalAmount: true,
-        adminShare: true,
-        teacherShare: true,
-        transactionDate: true,
-        paymentSource: true,
-      },
-    });
+    const [cards, charts] = await Promise.all([
+      this.getCardsData(startDate, endDate),
+      this.getChartsData(startDate, endDate),
+    ]);
 
-    const stats = transactions.reduce(
-      (acc, transaction) => {
-        const amount = transaction.totalAmount.toNumber();
-        const adminShare = transaction.adminShare.toNumber();
-        const teacherShare = transaction.teacherShare?.toNumber() || 0;
+    return { cards, charts };
+  }
 
-        if (transaction.transactionType === 'BALANCE_UP') {
-          acc.totalRevenue += amount;
-          acc.balanceTopups += amount;
-          acc.balanceTopupCount++;
-        }
+  private async getCardsData(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<Record<string, DashboardCardType>> {
+    const result = await this.prisma.$queryRaw<any[]>`
+      WITH date_params AS (
+        SELECT 
+          ${startDate}::timestamp AS curr_start,
+          ${endDate}::timestamp AS curr_end,
+          ${startDate}::timestamp - (${endDate}::timestamp - ${startDate}::timestamp) AS prev_start,
+          ${startDate}::timestamp AS prev_end
+      ),
+      
+      user_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS new_users_curr,
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS new_users_prev,
+          COUNT(*) FILTER (WHERE "createdAt" <= (SELECT curr_end FROM date_params)) AS total_users,
+          COUNT(*) FILTER (WHERE role = 'STUDENT' AND "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS new_students_curr,
+          COUNT(*) FILTER (WHERE role = 'STUDENT' AND "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS new_students_prev,
+          COUNT(*) FILTER (WHERE role = 'STUDENT' AND "createdAt" <= (SELECT curr_end FROM date_params)) AS total_students,
+          COUNT(*) FILTER (WHERE role = 'TEACHER' AND "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS new_teachers_curr,
+          COUNT(*) FILTER (WHERE role = 'TEACHER' AND "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS new_teachers_prev,
+          COUNT(*) FILTER (WHERE role = 'TEACHER' AND "createdAt" <= (SELECT curr_end FROM date_params)) AS total_teachers,
+          COUNT(*) FILTER (WHERE role = 'GUARDIAN' AND "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS new_guardians_curr,
+          COUNT(*) FILTER (WHERE role = 'GUARDIAN' AND "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS new_guardians_prev,
+          COUNT(*) FILTER (WHERE role = 'GUARDIAN' AND "createdAt" <= (SELECT curr_end FROM date_params)) AS total_guardians
+        FROM "User"
+      ),
+      
+      active_teacher_stats AS (
+        SELECT
+          COUNT(DISTINCT t.id) FILTER (WHERE c."createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params) OR b."createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS active_teachers_curr,
+          COUNT(DISTINCT t.id) FILTER (WHERE c."createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params) OR b."createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS active_teachers_prev,
+          COUNT(DISTINCT CASE WHEN t."isActive" = true THEN t.id END) AS total_active_teachers
+        FROM "Teacher" t
+        LEFT JOIN "Course" c ON c."teacherId" = t.id
+        LEFT JOIN "Book" b ON b."teacherId" = t.id
+      ),
+      
+      revenue_stats AS (
+        SELECT
+          COALESCE(SUM("totalAmount") FILTER (WHERE "transactionType" = 'ORDER' AND "transactionDate" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)), 0) AS total_revenue_curr,
+          COALESCE(SUM("totalAmount") FILTER (WHERE "transactionType" = 'ORDER' AND "transactionDate" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)), 0) AS total_revenue_prev,
+          COALESCE(SUM("adminShare") FILTER (WHERE "transactionType" = 'ORDER' AND "transactionDate" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)), 0) AS platform_revenue_curr,
+          COALESCE(SUM("adminShare") FILTER (WHERE "transactionType" = 'ORDER' AND "transactionDate" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)), 0) AS platform_revenue_prev,
+          COALESCE(SUM("teacherShare") FILTER (WHERE "transactionType" = 'ORDER' AND "transactionDate" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)), 0) AS teachers_revenue_curr,
+          COALESCE(SUM("teacherShare") FILTER (WHERE "transactionType" = 'ORDER' AND "transactionDate" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)), 0) AS teachers_revenue_prev
+        FROM "Transaction"
+      ),
+      
+      withdrawal_stats AS (
+        SELECT
+          COALESCE(SUM(amount) FILTER (WHERE status IN ('PENDING', 'APPROVED') AND "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)), 0) AS pending_withdrawals_curr,
+          COALESCE(SUM(amount) FILTER (WHERE status IN ('PENDING', 'APPROVED') AND "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)), 0) AS pending_withdrawals_prev,
+          COALESCE(SUM(amount) FILTER (WHERE status = 'COMPLETED' AND "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)), 0) AS completed_withdrawals_curr,
+          COALESCE(SUM(amount) FILTER (WHERE status = 'COMPLETED' AND "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)), 0) AS completed_withdrawals_prev
+        FROM "WithdrawRequest"
+      ),
+      
+      order_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS total_orders_curr,
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS total_orders_prev,
+          COUNT(*) FILTER (WHERE status = 'PENDING' AND "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS pending_orders_curr,
+          COUNT(*) FILTER (WHERE status = 'PENDING' AND "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS pending_orders_prev,
+          COUNT(*) FILTER (WHERE status = 'COMPLETED' AND "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS completed_orders_curr,
+          COUNT(*) FILTER (WHERE status = 'COMPLETED' AND "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS completed_orders_prev,
+          COUNT(*) FILTER (WHERE status = 'CANCELLED' AND "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS cancelled_orders_curr,
+          COUNT(*) FILTER (WHERE status = 'CANCELLED' AND "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS cancelled_orders_prev
+        FROM "Order"
+      ),
+      
+      enrollment_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE "purchasedAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS total_enrollments_curr,
+          COUNT(*) FILTER (WHERE "purchasedAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS total_enrollments_prev
+        FROM "StudentCourse"
+      ),
+      
+      review_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS total_reviews_curr,
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS total_reviews_prev,
+          COALESCE(AVG(rating) FILTER (WHERE "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)), 0) AS avg_rating_curr,
+          COALESCE(AVG(rating) FILTER (WHERE "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)), 0) AS avg_rating_prev
+        FROM "Review"
+      ),
+      
+      comment_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS total_comments_curr,
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS total_comments_prev
+        FROM "Comment"
+      ),
+      
+      quiz_attempt_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE "startedAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS total_quiz_attempts_curr,
+          COUNT(*) FILTER (WHERE "startedAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS total_quiz_attempts_prev
+        FROM "QuizAttempt"
+      ),
+      
+      course_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS new_courses_curr,
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS new_courses_prev,
+          COUNT(*) FILTER (WHERE "createdAt" <= (SELECT curr_end FROM date_params)) AS total_courses
+        FROM "Course"
+      ),
+      
+      book_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS new_books_curr,
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS new_books_prev,
+          COUNT(*) FILTER (WHERE "createdAt" <= (SELECT curr_end FROM date_params)) AS total_books
+        FROM "Book"
+      ),
+      
+      lecture_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS new_lectures_curr,
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS new_lectures_prev,
+          COUNT(*) FILTER (WHERE "createdAt" <= (SELECT curr_end FROM date_params)) AS total_lectures
+        FROM "Lecture"
+      ),
+      
+      quiz_stats AS (
+        SELECT
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT curr_start FROM date_params) AND (SELECT curr_end FROM date_params)) AS new_quizzes_curr,
+          COUNT(*) FILTER (WHERE "createdAt" BETWEEN (SELECT prev_start FROM date_params) AND (SELECT prev_end FROM date_params)) AS new_quizzes_prev,
+          COUNT(*) FILTER (WHERE "createdAt" <= (SELECT curr_end FROM date_params)) AS total_quizzes,
+          COUNT(*) FILTER (WHERE "isActive" = true AND "createdAt" <= (SELECT curr_end FROM date_params)) AS active_quizzes_curr,
+          COUNT(*) FILTER (WHERE "isActive" = true AND "createdAt" <= (SELECT prev_end FROM date_params)) AS active_quizzes_prev
+        FROM "Quiz"
+      )
+      SELECT 
+        u.*, at.*, r.*, w.*, o.*, e.*, rv.*, cm.*, qa.*, cs.*, bs.*, ls.*, qs.*
+      FROM user_stats u
+      CROSS JOIN active_teacher_stats at
+      CROSS JOIN revenue_stats r
+      CROSS JOIN withdrawal_stats w
+      CROSS JOIN order_stats o
+      CROSS JOIN enrollment_stats e
+      CROSS JOIN review_stats rv
+      CROSS JOIN comment_stats cm
+      CROSS JOIN quiz_attempt_stats qa
+      CROSS JOIN course_stats cs
+      CROSS JOIN book_stats bs
+      CROSS JOIN lecture_stats ls
+      CROSS JOIN quiz_stats qs
+    `;
 
-        if (transaction.transactionType === 'ORDER') {
-          acc.totalAdminProfits += adminShare;
-          acc.totalTeacherEarnings += teacherShare;
-          acc.salesCount++;
+    const data = result[0];
 
-          if (transaction.paymentSource === 'CREDIT_CARD') {
-            acc.totalRevenue += amount;
-            acc.salesRevenue += amount;
-          }
-        }
-
-        if (
-          transaction.transactionType === 'TEACHER_WITHDRAWAL' ||
-          transaction.transactionType === 'STUDENT_WITHDRAWAL'
-        ) {
-          acc.totalRevenue += amount;
-        }
-
-        return acc;
-      },
-      {
-        totalRevenue: 0,
-        totalAdminProfits: 0,
-        totalTeacherEarnings: 0,
-        salesRevenue: 0,
-        salesCount: 0,
-        balanceTopups: 0,
-        balanceTopupCount: 0,
-      },
-    );
-
-    const currentBalances = await this.getCurrentBalances();
-    const withdrawalAmounts = await this.getTotalWithdrawnAmounts();
-
-    const adminUser = await this.prisma.user.findFirst({
-      where: { role: 'ADMIN' },
-      select: { balance: true },
-    });
-
-    const adminCurrentMoney = adminUser?.balance.toNumber() || 0;
+    const calculateCard = (
+      currValue: number,
+      prevValue: number,
+    ): DashboardCardType => {
+      const change =
+        prevValue === 0
+          ? currValue > 0
+            ? 100
+            : 0
+          : ((currValue - prevValue) / prevValue) * 100;
+      return {
+        value: Number(currValue),
+        change: Math.round(change * 100) / 100,
+        changeType:
+          change > 0 ? 'increase' : change < 0 ? 'decrease' : 'neutral',
+      };
+    };
 
     return {
-      ...stats,
-      ...currentBalances,
-      ...withdrawalAmounts,
-      adminCurrentMoney,
+      newUsersThisMonth: calculateCard(
+        Number(data.new_users_curr),
+        Number(data.new_users_prev),
+      ),
+      totalRevenue: calculateCard(
+        Number(data.total_revenue_curr),
+        Number(data.total_revenue_prev),
+      ),
+      platformRevenue: calculateCard(
+        Number(data.platform_revenue_curr),
+        Number(data.platform_revenue_prev),
+      ),
+      teachersRevenue: calculateCard(
+        Number(data.teachers_revenue_curr),
+        Number(data.teachers_revenue_prev),
+      ),
+      pendingWithdrawals: calculateCard(
+        Number(data.pending_withdrawals_curr),
+        Number(data.pending_withdrawals_prev),
+      ),
+      completedWithdrawals: calculateCard(
+        Number(data.completed_withdrawals_curr),
+        Number(data.completed_withdrawals_prev),
+      ),
+      totalOrders: calculateCard(
+        Number(data.total_orders_curr),
+        Number(data.total_orders_prev),
+      ),
+      pendingOrders: calculateCard(
+        Number(data.pending_orders_curr),
+        Number(data.pending_orders_prev),
+      ),
+      completedOrders: calculateCard(
+        Number(data.completed_orders_curr),
+        Number(data.completed_orders_prev),
+      ),
+      cancelledOrders: calculateCard(
+        Number(data.cancelled_orders_curr),
+        Number(data.cancelled_orders_prev),
+      ),
+      totalEnrollments: calculateCard(
+        Number(data.total_enrollments_curr),
+        Number(data.total_enrollments_prev),
+      ),
+      totalReviews: calculateCard(
+        Number(data.total_reviews_curr),
+        Number(data.total_reviews_prev),
+      ),
+      totalComments: calculateCard(
+        Number(data.total_comments_curr),
+        Number(data.total_comments_prev),
+      ),
+      totalQuizAttempts: calculateCard(
+        Number(data.total_quiz_attempts_curr),
+        Number(data.total_quiz_attempts_prev),
+      ),
+      totalUsers: calculateCard(
+        Number(data.total_users),
+        Number(data.total_users) - Number(data.new_users_curr),
+      ),
+      totalStudents: calculateCard(
+        Number(data.total_students),
+        Number(data.total_students) - Number(data.new_students_curr),
+      ),
+      totalTeachers: calculateCard(
+        Number(data.total_teachers),
+        Number(data.total_teachers) - Number(data.new_teachers_curr),
+      ),
+      activeTeachers: calculateCard(
+        Number(data.total_active_teachers),
+        Number(data.total_active_teachers) -
+          Number(data.active_teachers_curr) +
+          Number(data.active_teachers_prev),
+      ),
+      totalGuardians: calculateCard(
+        Number(data.total_guardians),
+        Number(data.total_guardians) - Number(data.new_guardians_curr),
+      ),
+      totalCourses: calculateCard(
+        Number(data.total_courses),
+        Number(data.total_courses) - Number(data.new_courses_curr),
+      ),
+      totalBooks: calculateCard(
+        Number(data.total_books),
+        Number(data.total_books) - Number(data.new_books_curr),
+      ),
+      totalLectures: calculateCard(
+        Number(data.total_lectures),
+        Number(data.total_lectures) - Number(data.new_lectures_curr),
+      ),
+      totalQuizzes: calculateCard(
+        Number(data.total_quizzes),
+        Number(data.total_quizzes) - Number(data.new_quizzes_curr),
+      ),
+      activeQuizzes: calculateCard(
+        Number(data.active_quizzes_curr),
+        Number(data.active_quizzes_prev),
+      ),
+      avgPlatformRating: calculateCard(
+        Number(data.avg_rating_curr),
+        Number(data.avg_rating_prev),
+      ),
     };
   }
 
-  async getCurrentBalances() {
-    const teacherBalances = await this.prisma.user.aggregate({
-      where: {
-        role: 'TEACHER',
-      },
-      _sum: {
-        balance: true,
-      },
-    });
-
-    const studentBalances = await this.prisma.user.aggregate({
-      where: {
-        role: 'STUDENT',
-      },
-      _sum: {
-        balance: true,
-      },
-    });
+  private async getChartsData(startDate: Date, endDate: Date) {
+    const [
+      revenueChart,
+      topContentChart,
+      revenuePieChart,
+      growthChart,
+      withdrawalsChart,
+      ordersStatusChart,
+      teacherPerformanceChart,
+    ] = await Promise.all([
+      this.getRevenueChart(startDate, endDate),
+      this.getTopContentChart(startDate, endDate),
+      this.getRevenuePieChart(startDate, endDate),
+      this.getGrowthChart(startDate, endDate),
+      this.getWithdrawalsChart(startDate, endDate),
+      this.getOrdersStatusChart(startDate, endDate),
+      this.getTeacherPerformanceChart(startDate, endDate),
+    ]);
 
     return {
-      totalTeacherBalances: teacherBalances._sum.balance?.toNumber() || 0,
-      totalStudentBalances: studentBalances._sum.balance?.toNumber() || 0,
+      revenueChart,
+      topContentChart,
+      revenuePieChart,
+      growthChart,
+      withdrawalsChart,
+      ordersStatusChart,
+      teacherPerformanceChart,
     };
   }
 
-  async getTotalWithdrawnAmounts() {
-    const completedWithdrawals = await this.prisma.withdrawRequest.aggregate({
-      where: {
-        status: 'COMPLETED',
-      },
-      _sum: {
-        amount: true,
-      },
-    });
+  private async getRevenueChart(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<RevenueChartItem[]> {
+    const result = await this.prisma.$queryRaw<RevenueChartItem[]>`
+      SELECT 
+        TO_CHAR(DATE_TRUNC('day', t."transactionDate"), 'YYYY-MM-DD') AS date,
+        COALESCE(SUM(t."adminShare")::numeric, 0) AS "platformRevenue",
+        COALESCE(SUM(t."teacherShare")::numeric, 0) AS "teachersRevenue",
+        COUNT(DISTINCT t."orderItemId")::integer AS orders
+      FROM "Transaction" t
+      WHERE t."transactionType" = 'ORDER'
+        AND t."transactionDate" BETWEEN ${startDate} AND ${endDate}
+      GROUP BY DATE_TRUNC('day', t."transactionDate")
+      ORDER BY date
+    `;
+    return result.map((r) => ({
+      date: r.date,
+      platformRevenue: Number(Number(r.platformRevenue).toFixed(2)),
+      teachersRevenue: Number(Number(r.teachersRevenue).toFixed(2)),
+      orders: Number(r.orders),
+    }));
+  }
 
-    const pendingWithdrawals = await this.prisma.withdrawRequest.aggregate({
-      where: {
-        status: {
-          in: ['PENDING', 'APPROVED'],
-        },
-      },
-      _sum: {
-        amount: true,
-      },
-    });
+  private async getTopContentChart(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<TopContentChartItem[]> {
+    const result = await this.prisma.$queryRaw<TopContentChartItem[]>`
+      WITH course_data AS (
+        SELECT 
+          c.id,
+          c."courseName" AS name,
+          'course' AS type,
+          COUNT(DISTINCT sc.id) AS enrollments,
+          COALESCE(SUM(t."totalAmount"), 0) AS revenue,
+          COALESCE(AVG(r.rating), 0) AS "avgRating",
+          u."displayName" AS "teacherName"
+        FROM "Course" c
+        LEFT JOIN "StudentCourse" sc ON sc."courseId" = c.id AND sc."purchasedAt" BETWEEN ${startDate} AND ${endDate}
+        LEFT JOIN "OrderItem" oi ON oi."productId" = c.id AND oi."productType" = 'COURSE'
+        LEFT JOIN "Transaction" t ON t."orderItemId" = oi.id AND t."transactionDate" BETWEEN ${startDate} AND ${endDate}
+        LEFT JOIN "Review" r ON r."courseId" = c.id AND r."createdAt" BETWEEN ${startDate} AND ${endDate}
+        JOIN "Teacher" te ON te.id = c."teacherId"
+        JOIN "User" u ON u.id = te.id
+        GROUP BY c.id, c."courseName", u."displayName"
+      ),
+      book_data AS (
+        SELECT 
+          b.id,
+          b."bookName" AS name,
+          'book' AS type,
+          0 AS enrollments,
+          COALESCE(SUM(t."totalAmount"), 0) AS revenue,
+          COALESCE(AVG(r.rating), 0) AS "avgRating",
+          u."displayName" AS "teacherName"
+        FROM "Book" b
+        LEFT JOIN "OrderItem" oi ON oi."productId" = b.id AND oi."productType" = 'BOOK'
+        LEFT JOIN "Transaction" t ON t."orderItemId" = oi.id AND t."transactionDate" BETWEEN ${startDate} AND ${endDate}
+        LEFT JOIN "Review" r ON r."bookId" = b.id AND r."createdAt" BETWEEN ${startDate} AND ${endDate}
+        JOIN "Teacher" te ON te.id = b."teacherId"
+        JOIN "User" u ON u.id = te.id
+        GROUP BY b.id, b."bookName", u."displayName"
+      ),
+      combined AS (
+        SELECT * FROM course_data
+        UNION ALL
+        SELECT * FROM book_data
+      )
+      SELECT * FROM combined
+      ORDER BY revenue DESC
+      LIMIT 5
+    `;
+    return result.map((r) => ({
+      id: Number(r.id),
+      name: r.name,
+      type: r.type,
+      enrollments: Number(r.enrollments),
+      revenue: Number(Number(r.revenue).toFixed(2)),
+      avgRating: Number(Number(r.avgRating).toFixed(2)),
+      teacherName: r.teacherName,
+    }));
+  }
 
-    return {
-      totalWithdrawn: completedWithdrawals._sum.amount?.toNumber() || 0,
-      pendingWithdrawals: pendingWithdrawals._sum.amount?.toNumber() || 0,
+  private async getRevenuePieChart(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<RevenuePieChartItem[]> {
+    const result = await this.prisma.$queryRaw<any[]>`
+      WITH revenue_by_type AS (
+        SELECT 
+          oi."productType"::text AS product_type,
+          COALESCE(SUM(t."totalAmount"), 0) AS revenue
+        FROM "Transaction" t
+        JOIN "OrderItem" oi ON oi.id = t."orderItemId"
+        WHERE t."transactionType" = 'ORDER'
+          AND t."transactionDate" BETWEEN ${startDate} AND ${endDate}
+        GROUP BY oi."productType"
+      ),
+      total AS (
+        SELECT SUM(revenue) AS total_revenue FROM revenue_by_type
+      )
+      SELECT 
+        r.product_type,
+        r.revenue::numeric,
+        CASE WHEN t.total_revenue > 0 
+          THEN ROUND((r.revenue / t.total_revenue * 100)::numeric, 2)
+          ELSE 0 
+        END AS percentage
+      FROM revenue_by_type r
+      CROSS JOIN total t
+    `;
+
+    const categoryMap: Record<string, string> = {
+      COURSE: 'الكورسات',
+      BOOK: 'الكتب',
     };
+
+    return result.map((r) => ({
+      category: categoryMap[r.product_type] || r.product_type,
+      revenue: Number(Number(r.revenue).toFixed(2)),
+      percentage: Number(Number(r.percentage).toFixed(2)),
+    }));
+  }
+
+  private async getGrowthChart(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<GrowthLineChartItem[]> {
+    const result = await this.prisma.$queryRaw<GrowthLineChartItem[]>`
+      WITH date_series AS (
+        SELECT generate_series(
+          DATE_TRUNC('day', ${startDate}::timestamp),
+          DATE_TRUNC('day', ${endDate}::timestamp),
+          '1 day'::interval
+        )::date AS date
+      ),
+      student_counts AS (
+        SELECT DATE_TRUNC('day', "createdAt")::date AS date, COUNT(*) AS count
+        FROM "User"
+        WHERE role = 'STUDENT' AND "createdAt" BETWEEN ${startDate} AND ${endDate}
+        GROUP BY DATE_TRUNC('day', "createdAt")
+      ),
+      teacher_counts AS (
+        SELECT DATE_TRUNC('day', "createdAt")::date AS date, COUNT(*) AS count
+        FROM "User"
+        WHERE role = 'TEACHER' AND "createdAt" BETWEEN ${startDate} AND ${endDate}
+        GROUP BY DATE_TRUNC('day', "createdAt")
+      ),
+      order_counts AS (
+        SELECT DATE_TRUNC('day', "createdAt")::date AS date, COUNT(*) AS count
+        FROM "Order"
+        WHERE "createdAt" BETWEEN ${startDate} AND ${endDate}
+        GROUP BY DATE_TRUNC('day', "createdAt")
+      ),
+      enrollment_counts AS (
+        SELECT DATE_TRUNC('day', "purchasedAt")::date AS date, COUNT(*) AS count
+        FROM "StudentCourse"
+        WHERE "purchasedAt" BETWEEN ${startDate} AND ${endDate}
+        GROUP BY DATE_TRUNC('day', "purchasedAt")
+      )
+      SELECT 
+        TO_CHAR(ds.date, 'YYYY-MM-DD') AS date,
+        COALESCE(sc.count, 0)::integer AS "newStudents",
+        COALESCE(tc.count, 0)::integer AS "newTeachers",
+        COALESCE(oc.count, 0)::integer AS "newOrders",
+        COALESCE(ec.count, 0)::integer AS "newEnrollments"
+      FROM date_series ds
+      LEFT JOIN student_counts sc ON sc.date = ds.date
+      LEFT JOIN teacher_counts tc ON tc.date = ds.date
+      LEFT JOIN order_counts oc ON oc.date = ds.date
+      LEFT JOIN enrollment_counts ec ON ec.date = ds.date
+      ORDER BY ds.date
+    `;
+    return result.map((r) => ({
+      date: r.date,
+      newStudents: Number(r.newStudents),
+      newTeachers: Number(r.newTeachers),
+      newOrders: Number(r.newOrders),
+      newEnrollments: Number(r.newEnrollments),
+    }));
+  }
+
+  private async getWithdrawalsChart(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<WithdrawalsChartItem[]> {
+    const result = await this.prisma.$queryRaw<WithdrawalsChartItem[]>`
+      WITH date_series AS (
+        SELECT generate_series(
+          DATE_TRUNC('day', ${startDate}::timestamp),
+          DATE_TRUNC('day', ${endDate}::timestamp),
+          '1 day'::interval
+        )::date AS date
+      )
+      SELECT 
+        TO_CHAR(ds.date, 'YYYY-MM-DD') AS date,
+        COALESCE(SUM(CASE WHEN w."userType" = 'TEACHER' THEN w.amount ELSE 0 END), 0)::numeric AS "teacherWithdrawals",
+        COALESCE(SUM(CASE WHEN w."userType" = 'STUDENT' THEN w.amount ELSE 0 END), 0)::numeric AS "studentWithdrawals",
+        COALESCE(SUM(CASE WHEN w.status IN ('PENDING', 'APPROVED') THEN w.amount ELSE 0 END), 0)::numeric AS pending,
+        COALESCE(SUM(CASE WHEN w.status = 'COMPLETED' THEN w.amount ELSE 0 END), 0)::numeric AS completed
+      FROM date_series ds
+      LEFT JOIN "WithdrawRequest" w ON DATE_TRUNC('day', w."createdAt")::date = ds.date
+        AND w."createdAt" BETWEEN ${startDate} AND ${endDate}
+      GROUP BY ds.date
+      ORDER BY ds.date
+    `;
+    return result.map((r) => ({
+      date: r.date,
+      teacherWithdrawals: Number(Number(r.teacherWithdrawals).toFixed(2)),
+      studentWithdrawals: Number(Number(r.studentWithdrawals).toFixed(2)),
+      pending: Number(Number(r.pending).toFixed(2)),
+      completed: Number(Number(r.completed).toFixed(2)),
+    }));
+  }
+
+  private async getOrdersStatusChart(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<OrdersStatusChartItem[]> {
+    const result = await this.prisma.$queryRaw<any[]>`
+      WITH status_counts AS (
+        SELECT status, COUNT(*) AS count
+        FROM "Order"
+        WHERE "createdAt" BETWEEN ${startDate} AND ${endDate}
+        GROUP BY status
+      ),
+      total AS (
+        SELECT SUM(count) AS total_count FROM status_counts
+      )
+      SELECT 
+        sc.status,
+        sc.count::integer,
+        CASE WHEN t.total_count > 0 
+          THEN ROUND((sc.count::numeric / t.total_count * 100), 2)
+          ELSE 0 
+        END AS percentage
+      FROM status_counts sc
+      CROSS JOIN total t
+    `;
+
+    const statusMap: Record<string, string> = {
+      PENDING: 'قيد الانتظار',
+      COMPLETED: 'مكتمل',
+      CANCELLED: 'ملغي',
+    };
+
+    return result.map((r) => ({
+      status: statusMap[r.status] || r.status,
+      count: Number(r.count),
+      percentage: Number(Number(r.percentage).toFixed(2)),
+    }));
+  }
+
+  private async getTeacherPerformanceChart(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<TeacherPerformanceChartItem[]> {
+    const result = await this.prisma.$queryRaw<TeacherPerformanceChartItem[]>`
+      SELECT 
+        t.id AS "teacherId",
+        u."displayName" AS "teacherName",
+        COALESCE(SUM(tr."teacherShare"), 0) AS revenue,
+        COUNT(DISTINCT c.id) AS "coursesCount",
+        COUNT(DISTINCT b.id) AS "booksCount"
+      FROM "Teacher" t
+      JOIN "User" u ON u.id = t.id
+      LEFT JOIN "Course" c ON c."teacherId" = t.id
+      LEFT JOIN "Book" b ON b."teacherId" = t.id
+      LEFT JOIN "Transaction" tr ON tr."teacherId" = t.id 
+        AND tr."transactionDate" BETWEEN ${startDate} AND ${endDate} 
+        AND tr."transactionType" = 'ORDER'
+      WHERE t."isActive" = true
+      GROUP BY t.id, u."displayName"
+      ORDER BY revenue DESC
+      LIMIT 5
+    `;
+    return result.map((r) => ({
+      teacherId: Number(r.teacherId),
+      teacherName: r.teacherName,
+      revenue: Number(Number(r.revenue).toFixed(2)),
+      coursesCount: Number(r.coursesCount),
+      booksCount: Number(r.booksCount),
+    }));
   }
 
   async processWithdrawal(
