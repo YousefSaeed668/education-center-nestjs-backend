@@ -87,19 +87,42 @@ export class AdminService {
     }
 
     const orderBy: any = {};
+    const orderDirection = sortOrder.toLowerCase();
+
     switch (sortBy) {
+      case WithdrawSortBy.DISPLAY_NAME:
+        orderBy.user = { displayName: orderDirection };
+        break;
+      case WithdrawSortBy.USERNAME:
+        orderBy.user = { userName: orderDirection };
+        break;
+      case WithdrawSortBy.PAYMENT_METHOD:
+        orderBy.paymentMethod = orderDirection;
+        break;
+      case WithdrawSortBy.ACCOUNT_HOLDER_NAME:
+        orderBy.accountHolderName = orderDirection;
+        break;
+      case WithdrawSortBy.BALANCE:
+        orderBy.user = { balance: orderDirection };
+        break;
+      case WithdrawSortBy.PROCESSED_BY_NAME:
+        orderBy.admin = { displayName: orderDirection };
+        break;
+      case WithdrawSortBy.PROCESSED_AT:
+        orderBy.processedAt = orderDirection;
+        break;
       case WithdrawSortBy.AMOUNT:
-        orderBy.amount = sortOrder.toLowerCase();
+        orderBy.amount = orderDirection;
         break;
       case WithdrawSortBy.STATUS:
-        orderBy.status = sortOrder.toLowerCase();
+        orderBy.status = orderDirection;
         break;
       case WithdrawSortBy.USER_TYPE:
-        orderBy.userType = sortOrder.toLowerCase();
+        orderBy.userType = orderDirection;
         break;
       case WithdrawSortBy.CREATED_AT:
       default:
-        orderBy.createdAt = sortOrder.toLowerCase();
+        orderBy.createdAt = orderDirection;
         break;
     }
 
@@ -110,7 +133,6 @@ export class AdminService {
         orderBy,
         skip,
         take: pageSize,
-
         select: {
           id: true,
           createdAt: true,

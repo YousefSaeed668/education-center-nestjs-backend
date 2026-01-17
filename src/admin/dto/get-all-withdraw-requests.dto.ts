@@ -18,6 +18,13 @@ export enum WithdrawSortBy {
   AMOUNT = 'amount',
   STATUS = 'status',
   USER_TYPE = 'userType',
+  DISPLAY_NAME = 'displayName',
+  USERNAME = 'username',
+  PAYMENT_METHOD = 'paymentMethod',
+  ACCOUNT_HOLDER_NAME = 'accountHolderName',
+  BALANCE = 'balance',
+  PROCESSED_BY_NAME = 'processedByName',
+  PROCESSED_AT = 'processedAt',
 }
 
 export enum SortOrder {

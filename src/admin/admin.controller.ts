@@ -36,7 +36,7 @@ export class AdminController {
     return this.adminService.getDashboardStatistics(startDate, endDate);
   }
 
-  @Patch('/withdraw-requests/:id/approve')
+  @Patch('/withdraw-request/:id')
   processWithdrawRequest(
     @Req() req,
     @Param('id', ParseIntPipe) id: number,
