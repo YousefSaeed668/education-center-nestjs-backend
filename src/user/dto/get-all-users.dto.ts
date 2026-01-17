@@ -1,187 +1,208 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  IsArray,
   IsBoolean,
   IsEnum,
+  IsInt,
   IsNumber,
   IsOptional,
-  Max,
+  IsString,
   Min,
-  ValidateIf,
 } from 'class-validator';
 
-export enum UserTypeFilter {
-  ALL = 'ALL',
-  TEACHERS = 'TEACHERS',
-  STUDENTS = 'STUDENTS',
-  GUARDIANS = 'GUARDIANS',
-}
-
-export enum SortField {
-  // Common fields
-  DISPLAY_NAME = 'displayName',
-  BALANCE = 'balance',
-  WITHDRAWAL_COUNT = 'withdrawCount',
-  CREATED_AT = 'createdAt',
-  // Teacher specific
-  TOTAL_REVENUE = 'totalRevenue',
-  TOTAL_PROFIT = 'totalProfit',
-
-  // Student specific
-  NUMBER_OF_COURSES = 'numberOfCourses',
-  TOTAL_SPENT = 'totalSpent',
-
-  // Guardian specific
-  LINKED_STUDENTS = 'linkedStudents',
+export enum UserType {
+  STUDENT = 'STUDENT',
+  TEACHER = 'TEACHER',
+  GUARDIAN = 'GUARDIAN',
 }
 
 export enum SortOrder {
-  ASC = 'asc',
-  DESC = 'desc',
+  ASC = 'ASC',
+  DESC = 'DESC',
+}
+
+export enum SortBy {
+  CREATED_AT = 'createdAt',
+  DISPLAY_NAME = 'displayName',
+  BALANCE = 'balance',
+
+  GRADE = 'grade',
+
+  TOTAL_COURSES = 'totalCourses',
+  TOTAL_BOOKS = 'totalBooks',
+  EARNINGS = 'earnings',
+  PLATFORM_SHARE = 'platformShare',
+
+  STUDENTS_COUNT = 'studentsCount',
 }
 
 export class GetAllUsersDto {
-  @IsOptional()
-  @IsEnum(UserTypeFilter)
-  userType?: UserTypeFilter = UserTypeFilter.ALL;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  page?: number = 1;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(1)
-  @Max(100)
-  pageSize?: number = 10;
-
-  @IsOptional()
-  @IsEnum(SortField)
-  @ValidateIf((o) => {
-    const commonFields = [
-      SortField.DISPLAY_NAME,
-      SortField.BALANCE,
-      SortField.WITHDRAWAL_COUNT,
-      SortField.CREATED_AT,
-    ];
-
-    if (o.userType === UserTypeFilter.ALL) {
-      return commonFields.includes(o.sortBy);
-    }
-
-    if (o.userType === UserTypeFilter.TEACHERS) {
-      const teacherFields = [
-        ...commonFields,
-        SortField.TOTAL_REVENUE,
-        SortField.TOTAL_PROFIT,
-      ];
-      return teacherFields.includes(o.sortBy);
-    }
-
-    if (o.userType === UserTypeFilter.STUDENTS) {
-      const studentFields = [
-        ...commonFields,
-        SortField.NUMBER_OF_COURSES,
-        SortField.TOTAL_SPENT,
-      ];
-      return studentFields.includes(o.sortBy);
-    }
-
-    if (o.userType === UserTypeFilter.GUARDIANS) {
-      const guardianFields = [...commonFields, SortField.LINKED_STUDENTS];
-      return guardianFields.includes(o.sortBy);
-    }
-
-    return true;
+  @IsEnum(UserType, {
+    message: 'نوع المستخدم يجب ان يكون معلم أو طالب أو ولي امر',
   })
-  sortBy?: SortField = SortField.DISPLAY_NAME;
+  userType: UserType;
+
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  pageNumber?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  pageSize?: number = 20;
+
   @IsOptional()
   @IsEnum(SortOrder)
-  sortOrder?: SortOrder = SortOrder.ASC;
-
-  // Balance filter (min-max range)
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  balanceMin?: number;
+  sortOrder?: SortOrder = SortOrder.DESC;
 
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  balanceMax?: number;
+  @IsEnum(SortBy)
+  sortBy?: SortBy = SortBy.CREATED_AT;
 
-  // Teacher specific filters
   @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @ValidateIf((o) => o.userType === UserTypeFilter.TEACHERS)
-  totalRevenueMin?: number;
+  @Type(() => Date)
+  registrationDateFrom?: Date;
+
+  @IsOptional()
+  @Type(() => Date)
+  registrationDateTo?: Date;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @ValidateIf((o) => o.userType === UserTypeFilter.TEACHERS)
-  totalRevenueMax?: number;
+  @IsInt()
+  gradeId?: number;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @ValidateIf((o) => o.userType === UserTypeFilter.TEACHERS)
-  totalProfitMin?: number;
+  @IsInt()
+  schoolTypeId?: number;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @ValidateIf((o) => o.userType === UserTypeFilter.TEACHERS)
-  totalProfitMax?: number;
-
-  // Student specific filters
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @ValidateIf((o) => o.userType === UserTypeFilter.STUDENTS)
-  numberOfCoursesMin?: number;
+  @IsInt()
+  educationTypeId?: number;
 
   @IsOptional()
   @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @ValidateIf((o) => o.userType === UserTypeFilter.STUDENTS)
-  numberOfCoursesMax?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @ValidateIf((o) => o.userType === UserTypeFilter.STUDENTS)
-  totalSpentMin?: number;
-
-  @IsOptional()
-  @Type(() => Number)
-  @IsNumber()
-  @Min(0)
-  @ValidateIf((o) => o.userType === UserTypeFilter.STUDENTS)
-  totalSpentMax?: number;
+  @IsInt()
+  divisionId?: number;
 
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
-  @ValidateIf((o) => o.userType === UserTypeFilter.STUDENTS)
-  onlyVerifiedGuardians?: boolean;
+  isGuardianVerified?: boolean;
 
-  // Guardian specific filters
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  minBalance?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  maxBalance?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  subjectId?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Transform(({ value }) =>
+    Array.isArray(value) ? value.map((v) => parseInt(v)) : [parseInt(value)],
+  )
+  @Type(() => Number)
+  gradeIds?: number[];
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  minEarnings?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  maxEarnings?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  minPlatformShare?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  maxPlatformShare?: number;
+
   @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
-  @ValidateIf((o) => o.userType === UserTypeFilter.GUARDIANS)
-  onlyWithLinkedStudents?: boolean;
+  hasVerifiedStudents?: boolean;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  minStudents?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  maxStudents?: number;
+}
+
+export interface StudentUserResponse {
+  id: number;
+  displayName: string;
+  userName: string;
+  phoneNumber: string;
+  gradeName: string;
+  schoolTypeName: string;
+  educationTypeName: string;
+  isGuardianVerified: boolean;
+  balance: number;
+  createdAt: Date;
+}
+
+export interface TeacherUserResponse {
+  id: number;
+  displayName: string;
+  userName: string;
+  phoneNumber: string;
+  subjectName: string;
+  educationTypeName: string;
+  totalCourses: number;
+  totalBooks: number;
+  earnings: number;
+  balance: number;
+  platformShare: number;
+  createdAt: Date;
+}
+
+export interface GuardianUserResponse {
+  id: number;
+  displayName: string;
+  userName: string;
+  phoneNumber: string;
+  linkedStudentsCount: number;
+  verifiedStudentsCount: number;
+  unverifiedStudentsCount: number;
+  createdAt: Date;
+}
+
+export interface PaginatedResponse<T> {
+  users: T[];
+  total: number;
+  totalPages: number;
+  pageNumber: number;
+  pageSize: number;
 }

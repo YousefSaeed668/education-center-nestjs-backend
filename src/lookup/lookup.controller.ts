@@ -13,6 +13,11 @@ export class LookupController {
     return this.lookupService.getSignUpData(params.userType);
   }
 
+  @Get('admin-filters')
+  getAdminAdminFilters() {
+    return this.lookupService.getAdminFilters();
+  }
+
   @Get('products/:productType')
   getProductsData(
     @Param('productType', new ParseEnumPipe(ProductType))

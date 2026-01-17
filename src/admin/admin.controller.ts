@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseIntPipe,
@@ -13,6 +14,7 @@ import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { GetAllUsersDto } from '../user/dto/get-all-users.dto';
 import { AdminService } from './admin.service';
+import { GetAllWithdrawRequestsDto } from './dto/get-all-withdraw-requests.dto';
 import { GetDashboardStatisticsDto } from './dto/get-dashboard-statistics.dto';
 import { ProcessWithdrawRequestDto } from './dto/process-withdraw-request.dto';
 import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
@@ -22,6 +24,10 @@ import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
+  @Get('withdraw-requests')
+  getAllWithdrawRequests(@Query() query: GetAllWithdrawRequestsDto) {
+    return this.adminService.getAllWithdrawRequests(query);
+  }
   @Get('dashboard-stats')
   getDashboardStatistics(@Query() query: GetDashboardStatisticsDto) {
     const endDate = query.endDate || new Date();
@@ -47,8 +53,13 @@ export class AdminController {
     return this.adminService.updatePlatformSettings(req.user.id, settings);
   }
 
-  @Get('get-all-users')
+  @Get('all-users')
   getAllUsers(@Query() query: GetAllUsersDto) {
     return this.adminService.getAllUsers(query);
+  }
+
+  @Delete('users/:id')
+  deleteUser(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.deleteUser(id);
   }
 }

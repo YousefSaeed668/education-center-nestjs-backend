@@ -587,4 +587,12 @@ export class LookupService {
       booksSection: data.booksSection,
     };
   }
+  async getAdminFilters() {
+    const data = await this.getSignUpData(UserType.TEACHER);
+    const schoolTypes = await this.prisma.schoolType.findMany();
+    return {
+      ...data,
+      schoolTypes,
+    };
+  }
 }

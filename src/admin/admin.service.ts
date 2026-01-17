@@ -5,7 +5,13 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from 'src/prisma.service';
 import { UserService } from 'src/user/user.service';
-import { GetAllUsersDto } from '../user/dto/get-all-users.dto';
+import { GetAllUsersDto, SortOrder } from '../user/dto/get-all-users.dto';
+import {
+  GetAllWithdrawRequestsDto,
+  PaginatedWithdrawResponse,
+  WithdrawRequestResponse,
+  WithdrawSortBy,
+} from './dto/get-all-withdraw-requests.dto';
 import {
   DashboardCardType,
   GrowthLineChartItem,
@@ -25,14 +31,142 @@ export class AdminService {
     private readonly prisma: PrismaService,
     private readonly userService: UserService,
   ) {}
+  async getAllWithdrawRequests(
+    dto: GetAllWithdrawRequestsDto,
+  ): Promise<PaginatedWithdrawResponse> {
+    const {
+      q,
+      pageNumber = 1,
+      pageSize = 20,
+      sortOrder = SortOrder.DESC,
+      sortBy = WithdrawSortBy.CREATED_AT,
+      status,
+      userType,
+      paymentMethod,
+      dateFrom,
+      dateTo,
+      minAmount,
+      maxAmount,
+    } = dto;
 
-  async getDashboardStatistics(startDate: Date, endDate: Date) {
-    if (startDate > endDate) {
-      throw new BadRequestException(
-        'تاريخ البدء يجب ان يكون قبل تاريخ الانتهاء',
-      );
+    const skip = (pageNumber - 1) * pageSize;
+
+    const where: any = {};
+
+    if (status) {
+      where.status = status;
     }
 
+    if (userType) {
+      where.userType = userType;
+    }
+
+    if (paymentMethod) {
+      where.paymentMethod = paymentMethod;
+    }
+
+    if (dateFrom || dateTo) {
+      where.createdAt = {};
+      if (dateFrom) where.createdAt.gte = dateFrom;
+      if (dateTo) where.createdAt.lte = dateTo;
+    }
+
+    if (minAmount !== undefined || maxAmount !== undefined) {
+      where.amount = {};
+      if (minAmount !== undefined) where.amount.gte = minAmount;
+      if (maxAmount !== undefined) where.amount.lte = maxAmount;
+    }
+
+    if (q) {
+      where.OR = [
+        { user: { displayName: { contains: q, mode: 'insensitive' } } },
+        { user: { userName: { contains: q, mode: 'insensitive' } } },
+        { phoneNumber: { contains: q, mode: 'insensitive' } },
+        { accountHolderName: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    const orderBy: any = {};
+    switch (sortBy) {
+      case WithdrawSortBy.AMOUNT:
+        orderBy.amount = sortOrder.toLowerCase();
+        break;
+      case WithdrawSortBy.STATUS:
+        orderBy.status = sortOrder.toLowerCase();
+        break;
+      case WithdrawSortBy.USER_TYPE:
+        orderBy.userType = sortOrder.toLowerCase();
+        break;
+      case WithdrawSortBy.CREATED_AT:
+      default:
+        orderBy.createdAt = sortOrder.toLowerCase();
+        break;
+    }
+
+    const [total, withdrawRequests] = await Promise.all([
+      this.prisma.withdrawRequest.count({ where }),
+      this.prisma.withdrawRequest.findMany({
+        where,
+        orderBy,
+        skip,
+        take: pageSize,
+
+        select: {
+          id: true,
+          createdAt: true,
+          status: true,
+          userType: true,
+          amount: true,
+          paymentMethod: true,
+          notes: true,
+          phoneNumber: true,
+          accountHolderName: true,
+          processedAt: true,
+          user: {
+            select: {
+              displayName: true,
+              userName: true,
+              balance: true,
+            },
+          },
+          admin: {
+            select: {
+              id: true,
+              displayName: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const totalPages = Math.ceil(total / pageSize);
+
+    const data: WithdrawRequestResponse[] = withdrawRequests.map((wr) => ({
+      id: wr.id,
+      createdAt: wr.createdAt,
+      status: wr.status,
+      displayName: wr.user.displayName,
+      userName: wr.user.userName,
+      userType: wr.userType,
+      amount: Number(wr.amount),
+      notes: wr.notes,
+      paymentMethod: wr.paymentMethod,
+      phoneNumber: wr.phoneNumber,
+      accountHolderName: wr.accountHolderName,
+      userBalance: Number(wr.user.balance),
+      processedByName: wr.admin?.displayName || null,
+      processedAt: wr.processedAt,
+    }));
+
+    return {
+      withdrawRequests: data,
+      total,
+      totalPages,
+      pageNumber,
+      pageSize,
+    };
+  }
+  async getDashboardStatistics(startDate: Date, endDate: Date) {
     const [cards, charts] = await Promise.all([
       this.getCardsData(startDate, endDate),
       this.getChartsData(startDate, endDate),
@@ -789,5 +923,71 @@ export class AdminService {
   }
   getAllUsers(getAllUsersDto: GetAllUsersDto) {
     return this.userService.getAllUsers(getAllUsersDto);
+  }
+
+  async deleteUser(userId: number) {
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUnique({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('المستخدم غير موجود');
+      }
+
+      if (user.role === 'GUARDIAN') {
+        await tx.student.updateMany({
+          where: { guardianId: userId },
+          data: { guardianId: null },
+        });
+      }
+
+      const student = await tx.student.findUnique({
+        where: { id: userId },
+      });
+
+      if (student) {
+        await tx.order.deleteMany({
+          where: { studentId: student.id },
+        });
+      }
+
+      if (user.role === 'TEACHER') {
+        const courses = await tx.course.findMany({
+          where: { teacherId: userId },
+          select: { id: true },
+        });
+        const lectures = await tx.lecture.findMany({
+          where: { teacherId: userId },
+          select: { id: true },
+        });
+
+        const courseIds = courses.map((c) => c.id);
+        const lectureIds = lectures.map((l) => l.id);
+
+        if (courseIds.length > 0 || lectureIds.length > 0) {
+          await tx.courseLecture.deleteMany({
+            where: {
+              OR: [
+                { courseId: { in: courseIds } },
+                { lectureId: { in: lectureIds } },
+              ],
+            },
+          });
+        }
+      }
+
+      await tx.transaction.deleteMany({
+        where: {
+          OR: [{ studentId: userId }, { teacherId: userId }],
+        },
+      });
+
+      await tx.user.delete({
+        where: { id: userId },
+      });
+
+      return { message: 'تم حذف المستخدم وجميع بياناته بنجاح' };
+    });
   }
 }
