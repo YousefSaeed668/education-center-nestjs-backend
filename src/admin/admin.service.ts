@@ -3,12 +3,22 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ProductType } from '@prisma/client';
+import { BookService } from 'src/book/book.service';
+import { CourseService } from 'src/course/course.service';
 import { PrismaService } from 'src/prisma.service';
 import { UserService } from 'src/user/user.service';
-import { GetAllUsersDto, SortOrder } from '../user/dto/get-all-users.dto';
+import { GetAllUsersDto } from '../user/dto/get-all-users.dto';
+import {
+  ContentResponse,
+  ContentSortBy,
+  GetAllContentDto,
+  PaginatedContentsResponse,
+} from './dto/get-all-content.dto';
 import {
   GetAllWithdrawRequestsDto,
   PaginatedWithdrawResponse,
+  SortOrder,
   WithdrawRequestResponse,
   WithdrawSortBy,
 } from './dto/get-all-withdraw-requests.dto';
@@ -29,6 +39,8 @@ import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
+    private readonly courseService: CourseService,
+    private readonly bookService: BookService,
     private readonly userService: UserService,
   ) {}
   async getAllWithdrawRequests(
@@ -1011,5 +1023,297 @@ export class AdminService {
 
       return { message: 'تم حذف المستخدم وجميع بياناته بنجاح' };
     });
+  }
+
+  async getAllContent(
+    dto: GetAllContentDto,
+  ): Promise<PaginatedContentsResponse> {
+    const {
+      q,
+      pageNumber = 1,
+      pageSize = 20,
+      sortOrder = 'DESC',
+      sortBy = ContentSortBy.CREATED_AT,
+      productType,
+      teacherId,
+      minPrice,
+      maxPrice,
+      dateFrom,
+      dateTo,
+      minEarnings,
+      maxEarnings,
+      minPlatformShare,
+      maxPlatformShare,
+    } = dto;
+
+    const offset = (pageNumber - 1) * pageSize;
+
+    const whereConditions: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (q) {
+      whereConditions.push(`name ILIKE $${paramIndex}`);
+      params.push(`%${q}%`);
+      paramIndex++;
+    }
+
+    if (productType) {
+      whereConditions.push(`product_type = $${paramIndex}`);
+      params.push(productType);
+      paramIndex++;
+    }
+
+    if (teacherId) {
+      whereConditions.push(`teacher_id = $${paramIndex}`);
+      params.push(teacherId);
+      paramIndex++;
+    }
+
+    if (minPrice !== undefined) {
+      whereConditions.push(`price >= $${paramIndex}`);
+      params.push(minPrice);
+      paramIndex++;
+    }
+
+    if (maxPrice !== undefined) {
+      whereConditions.push(`price <= $${paramIndex}`);
+      params.push(maxPrice);
+      paramIndex++;
+    }
+
+    if (dateFrom) {
+      whereConditions.push(`created_at >= $${paramIndex}`);
+      params.push(dateFrom);
+      paramIndex++;
+    }
+
+    if (dateTo) {
+      whereConditions.push(`created_at <= $${paramIndex}`);
+      params.push(dateTo);
+      paramIndex++;
+    }
+
+    if (minEarnings !== undefined) {
+      whereConditions.push(`earnings >= $${paramIndex}`);
+      params.push(minEarnings);
+      paramIndex++;
+    }
+
+    if (maxEarnings !== undefined) {
+      whereConditions.push(`earnings <= $${paramIndex}`);
+      params.push(maxEarnings);
+      paramIndex++;
+    }
+
+    if (minPlatformShare !== undefined) {
+      whereConditions.push(`platform_share >= $${paramIndex}`);
+      params.push(minPlatformShare);
+      paramIndex++;
+    }
+
+    if (maxPlatformShare !== undefined) {
+      whereConditions.push(`platform_share <= $${paramIndex}`);
+      params.push(maxPlatformShare);
+      paramIndex++;
+    }
+
+    const whereClause =
+      whereConditions.length > 0
+        ? `WHERE ${whereConditions.join(' AND ')}`
+        : '';
+
+    const sortColumnMap: Record<string, string> = {
+      [ContentSortBy.CREATED_AT]: 'created_at',
+      [ContentSortBy.PRICE]: 'price',
+      [ContentSortBy.NAME]: 'name',
+      [ContentSortBy.PRODUCT_TYPE]: 'product_type',
+      [ContentSortBy.TEACHER_NAME]: 'teacher_name',
+      [ContentSortBy.EARNINGS]: 'earnings',
+      [ContentSortBy.PLATFORM_SHARE]: 'platform_share',
+      [ContentSortBy.SOLD_COUNT]: 'sold_count',
+    };
+
+    const sortColumn = sortColumnMap[sortBy] || 'created_at';
+    const sortDirection = sortOrder === SortOrder.ASC ? 'ASC' : 'DESC';
+
+    const baseQuery = `
+      WITH content_data AS (
+        SELECT 
+          c.id,
+          'COURSE'::text AS product_type,
+          c."courseName" AS name,
+          c.price::numeric AS price,
+          c."teacherId" AS teacher_id,
+          u."displayName" AS teacher_name,
+          c."subjectId" AS subject_id,
+          s.name AS subject,
+          c."gradeId" AS grade_id,
+          g.name AS grade,
+          c."createdAt" AS created_at,
+          ARRAY_AGG(DISTINCT d.id) FILTER (WHERE d.id IS NOT NULL) AS division_ids,
+          ARRAY_AGG(DISTINCT d.name) FILTER (WHERE d.name IS NOT NULL) AS divisions,
+          COALESCE((
+            SELECT SUM(t."totalAmount")
+            FROM "Transaction" t
+            JOIN "OrderItem" oi ON oi.id = t."orderItemId"
+            JOIN "Order" o ON o.id = oi."orderId"
+            WHERE oi."productId" = c.id 
+              AND oi."productType" = 'COURSE'
+              AND o.status = 'COMPLETED'
+              AND t."transactionType" = 'ORDER'
+          ), 0) AS earnings,
+          COALESCE((
+            SELECT SUM(t."adminShare")
+            FROM "Transaction" t
+            JOIN "OrderItem" oi ON oi.id = t."orderItemId"
+            JOIN "Order" o ON o.id = oi."orderId"
+            WHERE oi."productId" = c.id 
+              AND oi."productType" = 'COURSE'
+              AND o.status = 'COMPLETED'
+              AND t."transactionType" = 'ORDER'
+          ), 0) AS platform_share,
+          COALESCE((
+            SELECT COUNT(DISTINCT oi.id)
+            FROM "OrderItem" oi
+            JOIN "Order" o ON o.id = oi."orderId"
+            WHERE oi."productId" = c.id 
+              AND oi."productType" = 'COURSE'
+              AND o.status = 'COMPLETED'
+          ), 0) AS sold_count
+        FROM "Course" c
+        JOIN "Teacher" t ON t.id = c."teacherId"
+        JOIN "User" u ON u.id = t.id
+        JOIN "Subject" s ON s.id = c."subjectId"
+        JOIN "Grade" g ON g.id = c."gradeId"
+        LEFT JOIN "_CourseToDivision" cd ON cd."A" = c.id
+        LEFT JOIN "Division" d ON d.id = cd."B"
+        GROUP BY c.id, c."courseName", c.price, c."teacherId", u."displayName", 
+                 c."subjectId", s.name, c."gradeId", g.name, c."createdAt"
+
+        UNION ALL
+
+        SELECT 
+          b.id,
+          'BOOK'::text AS product_type,
+          b."bookName" AS name,
+          b.price::numeric AS price,
+          b."teacherId" AS teacher_id,
+          u."displayName" AS teacher_name,
+          b."subjectId" AS subject_id,
+          s.name AS subject,
+          b."gradeId" AS grade_id,
+          g.name AS grade,
+          b."createdAt" AS created_at,
+          ARRAY_AGG(DISTINCT d.id) FILTER (WHERE d.id IS NOT NULL) AS division_ids,
+          ARRAY_AGG(DISTINCT d.name) FILTER (WHERE d.name IS NOT NULL) AS divisions,
+          COALESCE((
+            SELECT SUM(t."totalAmount")
+            FROM "Transaction" t
+            JOIN "OrderItem" oi ON oi.id = t."orderItemId"
+            JOIN "Order" o ON o.id = oi."orderId"
+            WHERE oi."productId" = b.id 
+              AND oi."productType" = 'BOOK'
+              AND o.status = 'COMPLETED'
+              AND t."transactionType" = 'ORDER'
+          ), 0) AS earnings,
+          COALESCE((
+            SELECT SUM(t."adminShare")
+            FROM "Transaction" t
+            JOIN "OrderItem" oi ON oi.id = t."orderItemId"
+            JOIN "Order" o ON o.id = oi."orderId"
+            WHERE oi."productId" = b.id 
+              AND oi."productType" = 'BOOK'
+              AND o.status = 'COMPLETED'
+              AND t."transactionType" = 'ORDER'
+          ), 0) AS platform_share,
+          COALESCE((
+            SELECT COUNT(DISTINCT oi.id)
+            FROM "OrderItem" oi
+            JOIN "Order" o ON o.id = oi."orderId"
+            WHERE oi."productId" = b.id 
+              AND oi."productType" = 'BOOK'
+              AND o.status = 'COMPLETED'
+          ), 0) AS sold_count
+        FROM "Book" b
+        JOIN "Teacher" t ON t.id = b."teacherId"
+        JOIN "User" u ON u.id = t.id
+        JOIN "Subject" s ON s.id = b."subjectId"
+        JOIN "Grade" g ON g.id = b."gradeId"
+        LEFT JOIN "_BookToDivision" bd ON bd."A" = b.id
+        LEFT JOIN "Division" d ON d.id = bd."B"
+        GROUP BY b.id, b."bookName", b.price, b."teacherId", u."displayName", 
+                 b."subjectId", s.name, b."gradeId", g.name, b."createdAt"
+      )
+    `;
+
+    const countQuery = `
+      ${baseQuery}
+      SELECT COUNT(*) as total FROM content_data ${whereClause}
+    `;
+
+    const dataQuery = `
+      ${baseQuery}
+      SELECT 
+        id,
+        product_type,
+        name,
+        price,
+        teacher_name,
+        subject,
+        grade,
+        divisions,
+        earnings,
+        platform_share,
+        sold_count,
+        created_at
+      FROM content_data
+      ${whereClause}
+      ORDER BY ${sortColumn} ${sortDirection}
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    const dataParams = [...params, pageSize, offset];
+
+    const [countResult, dataResult] = await Promise.all([
+      this.prisma.$queryRawUnsafe<[{ total: bigint }]>(countQuery, ...params),
+      this.prisma.$queryRawUnsafe<any[]>(dataQuery, ...dataParams),
+    ]);
+
+    const total = Number(countResult[0]?.total || 0);
+    const totalPages = Math.ceil(total / pageSize);
+
+    const content: ContentResponse[] = dataResult.map((row) => ({
+      id: Number(row.id),
+      productType: row.product_type as 'COURSE' | 'BOOK',
+      name: row.name,
+      price: Number(row.price),
+      teacherName: row.teacher_name,
+      subject: row.subject,
+      grade: row.grade,
+      divisions: row.divisions || [],
+      earnings: Number(row.earnings),
+      platformShare: Number(row.platform_share),
+      soldCount: Number(row.sold_count),
+      createdAt: row.created_at,
+    }));
+
+    return {
+      content,
+      total,
+      totalPages,
+      pageNumber,
+      pageSize,
+    };
+  }
+  async deleteContent(id: number, productType: ProductType) {
+    if (productType === ProductType.COURSE) {
+      await this.courseService.deleteCourse(id);
+      return;
+    }
+    if (productType === ProductType.BOOK) {
+      await this.bookService.deleteBook(id);
+      return;
+    }
   }
 }

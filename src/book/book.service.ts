@@ -345,13 +345,15 @@ export class BookService {
       id: book.id.toString(),
     }));
   }
-  async deleteBook(teacherId: number, bookId: number) {
+  async deleteBook(bookId: number, teacherId?: number) {
     return await this.prisma.$transaction(async (prisma) => {
+      const whereClause: any = { id: bookId };
+
+      if (teacherId !== undefined) {
+        whereClause.teacherId = teacherId;
+      }
       const existingBook = await prisma.book.findFirst({
-        where: {
-          id: bookId,
-          teacherId: teacherId,
-        },
+        where: whereClause,
       });
 
       if (!existingBook) {

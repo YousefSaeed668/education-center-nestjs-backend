@@ -4,16 +4,18 @@ import {
   Delete,
   Get,
   Param,
+  ParseEnumPipe,
   ParseIntPipe,
   Patch,
   Post,
   Query,
   Req,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { ProductType, Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { GetAllUsersDto } from '../user/dto/get-all-users.dto';
 import { AdminService } from './admin.service';
+import { GetAllContentDto } from './dto/get-all-content.dto';
 import { GetAllWithdrawRequestsDto } from './dto/get-all-withdraw-requests.dto';
 import { GetDashboardStatisticsDto } from './dto/get-dashboard-statistics.dto';
 import { ProcessWithdrawRequestDto } from './dto/process-withdraw-request.dto';
@@ -61,5 +63,19 @@ export class AdminController {
   @Delete('users/:id')
   deleteUser(@Param('id', ParseIntPipe) id: number) {
     return this.adminService.deleteUser(id);
+  }
+
+  @Get('content')
+  getAllContents(@Query() query: GetAllContentDto) {
+    return this.adminService.getAllContent(query);
+  }
+
+  @Delete('content/:id')
+  deleteContent(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('productType', new ParseEnumPipe(ProductType))
+    productType: ProductType,
+  ) {
+    return this.adminService.deleteContent(id, productType);
   }
 }

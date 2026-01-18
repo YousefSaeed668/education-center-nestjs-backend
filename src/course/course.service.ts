@@ -108,13 +108,14 @@ export class CourseService {
     });
   }
 
-  async deleteCourse(teacherId: number, courseId: number) {
+  async deleteCourse(courseId: number, teacherId?: number) {
     return await this.prisma.$transaction(async (prisma) => {
+      const whereClause: any = { id: courseId };
+      if (teacherId) {
+        whereClause.teacherId = teacherId;
+      }
       const existingCourse = await prisma.course.findFirst({
-        where: {
-          id: courseId,
-          teacherId: teacherId,
-        },
+        where: whereClause,
       });
 
       if (!existingCourse) {
