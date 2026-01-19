@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PaymentSource, Prisma, WithdrawUserType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -121,9 +125,21 @@ export class StudentService {
         },
       },
     });
-
+    const platformSettings = await this.prisma.platformSetting.findFirst({
+      select: {
+        minimumRechargeAmount: true,
+      },
+    });
     if (!student) {
       throw new NotFoundException('الطالب غير موجود');
+    }
+    if (!platformSettings) {
+      throw new NotFoundException('إعدادات المنصة غير موجودة');
+    }
+    if (amount < platformSettings?.minimumRechargeAmount.toNumber()) {
+      throw new BadRequestException(
+        `الحد الأدنى للشحن هو ${platformSettings?.minimumRechargeAmount.toNumber()} جنيه`,
+      );
     }
     const paymentItem = {
       name: 'شحن الرصيد',

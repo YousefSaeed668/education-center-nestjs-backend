@@ -11,3 +11,11 @@ export class GetSignUpDataDto {
   })
   userType: UserType;
 }
+
+export enum SettingType {
+  minimumRechargeAmount = 'minimumRechargeAmount',
+  minimumWithdrawAmount = 'minimumWithdrawAmount',
+  teacherRegistration = 'teacherRegistration',
+  platformPercentage = 'platformPercentage',
+  all = 'all',
+}

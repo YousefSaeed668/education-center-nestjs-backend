@@ -225,6 +225,7 @@ model PlatformSetting {
   teacherRegistration   Boolean @default(true)
   platformPercentage    Decimal @default(0.1) @db.Decimal(3, 2)
   minimumWithdrawAmount Decimal @default(10) @db.Decimal(10, 2)
+  minimumRechargeAmount Decimal @default(10) @db.Decimal(10, 2)
 }
 
 enum Gender {

@@ -1,10 +1,32 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ProductType } from '@prisma/client';
 import { PrismaService } from 'src/prisma.service';
-import { UserType } from './dto/get-signup-data.dto';
+import { SettingType, UserType } from './dto/get-signup-data.dto';
 
 @Injectable()
 export class LookupService {
+  async getPlatformSettings(settingType: SettingType) {
+    const setting = await this.prisma.platformSetting.findFirst();
+
+    if (!setting) {
+      throw new NotFoundException('اعدادات المنصة غير موجودة');
+    }
+
+    const normalizedSetting = {
+      ...setting,
+      platformPercentage: Number(setting.platformPercentage),
+      minimumWithdrawAmount: Number(setting.minimumWithdrawAmount),
+      minimumRechargeAmount: Number(setting.minimumRechargeAmount),
+    };
+
+    if (settingType === SettingType.all) {
+      return normalizedSetting;
+    }
+
+    return {
+      [settingType]: normalizedSetting[settingType],
+    };
+  }
   constructor(private readonly prisma: PrismaService) {}
   async getSignUpData(userType: UserType) {
     if (userType === UserType.STUDENT) {

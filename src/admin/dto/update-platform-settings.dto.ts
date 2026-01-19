@@ -25,6 +25,10 @@ export class UpdatePlatformSettingsDto {
   @Min(0)
   minimumWithdrawAmount: number;
 
+  @IsNumber()
+  @Min(0)
+  minimumRechargeAmount: number;
+
   @IsOptional()
   @IsString()
   @MinLength(3, { message: 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل' })

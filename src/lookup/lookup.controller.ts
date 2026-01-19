@@ -1,7 +1,7 @@
-import { Controller, Get, Param, ParseEnumPipe } from '@nestjs/common';
+import { Controller, Get, Param, ParseEnumPipe, Query } from '@nestjs/common';
 import { ProductType } from '@prisma/client';
 import { Public } from 'src/auth/decorators/public.decorator';
-import { GetSignUpDataDto } from './dto/get-signup-data.dto';
+import { GetSignUpDataDto, SettingType } from './dto/get-signup-data.dto';
 import { LookupService } from './lookup.service';
 
 @Public()
@@ -11,6 +11,14 @@ export class LookupController {
   @Get('signup/:userType')
   getSignUpData(@Param() params: GetSignUpDataDto) {
     return this.lookupService.getSignUpData(params.userType);
+  }
+
+  @Get('platform-settings')
+  getPlatformSettings(
+    @Query('settingType', new ParseEnumPipe(SettingType))
+    settingType: SettingType,
+  ) {
+    return this.lookupService.getPlatformSettings(settingType);
   }
 
   @Get('admin-filters')

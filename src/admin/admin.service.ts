@@ -961,6 +961,7 @@ export class AdminService {
       teacherRegistration: platformSettings.teacherRegistration,
       platformPercentage: platformSettings.platformPercentage.toNumber(),
       minimumWithdrawAmount: platformSettings.minimumWithdrawAmount.toNumber(),
+      minimumRechargeAmount: platformSettings.minimumRechargeAmount.toNumber(),
       displayName: admin.displayName,
       phoneNumber: admin.phoneNumber,
     };
