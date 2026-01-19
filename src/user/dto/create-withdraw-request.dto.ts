@@ -29,8 +29,8 @@ export class CreateWithdrawRequestDto {
   notes?: string;
 
   @IsNumber()
-  @Min(10, {
-    message: 'اقل مبلغ للسحب هو 10 جنيهات',
+  @Min(0, {
+    message: 'المبلغ يجب ان يكون اكبر من 0',
   })
   amount: number;
 

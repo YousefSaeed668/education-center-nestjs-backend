@@ -293,11 +293,16 @@ export class OrderService {
           throw new NotFoundException(' عربة التسوق غير موجودة');
         }
 
+        const hasBooks = cart.cartItems.some(
+          (item) => item.productType === 'BOOK',
+        );
+        const orderStatus = hasBooks ? 'PENDING' : 'COMPLETED';
+
         const order = await tx.order.create({
           data: {
             studentId: payload.studentId,
             totalAmount: payload.amountCents / 100,
-            status: 'COMPLETED',
+            status: orderStatus,
             transactionId: payload.transactionId.toString(),
             shippingAddressId: payload.metadata.addressId || null,
           },
@@ -607,11 +612,14 @@ export class OrderService {
 
     try {
       await this.prisma.$transaction(async (tx) => {
+        const orderStatus =
+          payload.metadata.productType === 'BOOK' ? 'PENDING' : 'COMPLETED';
+
         const order = await tx.order.create({
           data: {
             studentId: payload.studentId,
             totalAmount: payload.amountCents / 100,
-            status: 'COMPLETED',
+            status: orderStatus,
             transactionId: payload.transactionId.toString(),
             shippingAddressId: payload.metadata.addressId || null,
           },

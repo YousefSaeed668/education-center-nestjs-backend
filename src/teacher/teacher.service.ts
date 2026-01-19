@@ -111,49 +111,11 @@ export class TeacherService {
     }
   }
   createWithdrawalRequest(teacherId: number, body: CreateWithdrawRequestDto) {
-    return this.prisma.$transaction(async (prisma) => {
-      const teacher = await prisma.user.findUnique({
-        where: { id: teacherId },
-        select: {
-          balance: true,
-        },
-      });
-      if (!teacher) {
-        throw new NotFoundException('المعلم غير موجود');
-      }
-      if (teacher.balance.lessThan(body.amount)) {
-        throw new BadRequestException(
-          'رصيد المعلم غير كافٍ لإجراء عملية السحب',
-        );
-      }
-      if (body.amount < 10) {
-        throw new BadRequestException('اقل مبلغ للسحب هو 10 جنيهات');
-      }
-      const withdrawRequest = await prisma.withdrawRequest.create({
-        data: {
-          amount: body.amount,
-          userId: teacherId,
-          accountHolderName: body.accountHolderName,
-          notes: body.notes,
-          paymentMethod: body.paymentMethod,
-          userType: WithdrawUserType.TEACHER,
-          phoneNumber: body.phoneNumber,
-        },
-      });
-      await prisma.user.update({
-        where: { id: teacherId },
-        data: {
-          balance: {
-            decrement: body.amount,
-          },
-        },
-      });
-      return {
-        message: 'تم إنشاء طلب السحب بنجاح',
-        status: 200,
-        data: withdrawRequest,
-      };
-    });
+    return this.userService.createWithdrawRequest(
+      teacherId,
+      WithdrawUserType.TEACHER,
+      body,
+    );
   }
 
   async getTeacherEarnings(

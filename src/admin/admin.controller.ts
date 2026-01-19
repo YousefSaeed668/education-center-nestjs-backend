@@ -15,7 +15,9 @@ import { ProductType, Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { GetAllUsersDto } from '../user/dto/get-all-users.dto';
 import { AdminService } from './admin.service';
+import { ChangeOrderStatusDto } from './dto/change-order-status.dto';
 import { GetAllContentDto } from './dto/get-all-content.dto';
+import { GetAllOrdersDto } from './dto/get-all-orders.dto';
 import { GetAllWithdrawRequestsDto } from './dto/get-all-withdraw-requests.dto';
 import { GetDashboardStatisticsDto } from './dto/get-dashboard-statistics.dto';
 import { ProcessWithdrawRequestDto } from './dto/process-withdraw-request.dto';
@@ -77,5 +79,17 @@ export class AdminController {
     productType: ProductType,
   ) {
     return this.adminService.deleteContent(id, productType);
+  }
+
+  @Get('orders')
+  getAllOrders(@Query() query: GetAllOrdersDto) {
+    return this.adminService.getAllOrders(query);
+  }
+  @Patch('order/:id')
+  changeOrderStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: ChangeOrderStatusDto,
+  ) {
+    return this.adminService.changeOrderStatus(id, body.status);
   }
 }

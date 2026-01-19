@@ -610,8 +610,19 @@ export class UserService {
           `رصيد ${userTypeText} غير كافٍ لإجراء عملية السحب`,
         );
       }
-      if (body.amount < 10) {
-        throw new BadRequestException('اقل مبلغ للسحب هو 10 جنيهات');
+      const platformSetting = await this.prisma.platformSetting.findFirst({
+        select: {
+          minimumWithdrawAmount: true,
+        },
+      });
+      if (!platformSetting) {
+        throw new NotFoundException('الإعدادات غير موجودة');
+      }
+      if (body.amount < platformSetting?.minimumWithdrawAmount.toNumber()) {
+        throw new BadRequestException(
+          'اقل مبلغ للسحب هو ' +
+            platformSetting?.minimumWithdrawAmount.toNumber(),
+        );
       }
 
       const withdrawRequest = await prisma.withdrawRequest.create({

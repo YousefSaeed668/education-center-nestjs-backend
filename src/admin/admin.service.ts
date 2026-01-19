@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ProductType } from '@prisma/client';
+import { ProductType, Status } from '@prisma/client';
 import { BookService } from 'src/book/book.service';
 import { CourseService } from 'src/course/course.service';
 import { PrismaService } from 'src/prisma.service';
@@ -15,6 +15,15 @@ import {
   GetAllContentDto,
   PaginatedContentsResponse,
 } from './dto/get-all-content.dto';
+import {
+  GetAllOrdersDto,
+  OrderItemResponse,
+  OrderResponse,
+  OrderSortBy,
+  PaginatedOrdersResponse,
+  ProductTypeFilter,
+  ShippingAddressResponse,
+} from './dto/get-all-orders.dto';
 import {
   GetAllWithdrawRequestsDto,
   PaginatedWithdrawResponse,
@@ -1315,5 +1324,259 @@ export class AdminService {
       await this.bookService.deleteBook(id);
       return;
     }
+  }
+
+  async getAllOrders(dto: GetAllOrdersDto): Promise<PaginatedOrdersResponse> {
+    const {
+      pageNumber = 1,
+      pageSize = 20,
+      sortOrder = SortOrder.DESC,
+      sortBy = OrderSortBy.CREATED_AT,
+      status,
+      dateFrom,
+      dateTo,
+      minAmount,
+      maxAmount,
+      paymentSource,
+      productType,
+    } = dto;
+
+    const offset = (pageNumber - 1) * pageSize;
+
+    const whereConditions: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (status) {
+      whereConditions.push(`o.status = $${paramIndex}::"Status"`);
+      params.push(status);
+      paramIndex++;
+    }
+
+    if (dateFrom) {
+      whereConditions.push(`o."createdAt" >= $${paramIndex}`);
+      params.push(dateFrom);
+      paramIndex++;
+    }
+
+    if (dateTo) {
+      whereConditions.push(`o."createdAt" <= $${paramIndex}`);
+      params.push(dateTo);
+      paramIndex++;
+    }
+
+    if (minAmount !== undefined) {
+      whereConditions.push(`o."totalAmount" >= $${paramIndex}`);
+      params.push(minAmount);
+      paramIndex++;
+    }
+
+    if (maxAmount !== undefined) {
+      whereConditions.push(`o."totalAmount" <= $${paramIndex}`);
+      params.push(maxAmount);
+      paramIndex++;
+    }
+
+    if (paymentSource) {
+      whereConditions.push(
+        `EXISTS (
+          SELECT 1 FROM "Transaction" t
+          JOIN "OrderItem" oi ON oi.id = t."orderItemId"
+          WHERE oi."orderId" = o.id 
+            AND t."transactionType" = 'ORDER' 
+            AND t."paymentSource" = $${paramIndex}::"PaymentSource"
+        )`,
+      );
+      params.push(paymentSource);
+      paramIndex++;
+    }
+
+    if (productType) {
+      if (productType === ProductTypeFilter.COURSE_ONLY) {
+        whereConditions.push(
+          `NOT EXISTS (SELECT 1 FROM "OrderItem" oi2 WHERE oi2."orderId" = o.id AND oi2."productType" = 'BOOK')`,
+        );
+      } else if (productType === ProductTypeFilter.BOOK_ONLY) {
+        whereConditions.push(
+          `NOT EXISTS (SELECT 1 FROM "OrderItem" oi2 WHERE oi2."orderId" = o.id AND oi2."productType" = 'COURSE')`,
+        );
+      } else if (productType === ProductTypeFilter.MIXED) {
+        whereConditions.push(
+          `EXISTS (SELECT 1 FROM "OrderItem" oi2 WHERE oi2."orderId" = o.id AND oi2."productType" = 'COURSE')`,
+        );
+        whereConditions.push(
+          `EXISTS (SELECT 1 FROM "OrderItem" oi2 WHERE oi2."orderId" = o.id AND oi2."productType" = 'BOOK')`,
+        );
+      }
+    }
+
+    const whereClause =
+      whereConditions.length > 0
+        ? `WHERE ${whereConditions.join(' AND ')}`
+        : '';
+
+    const sortColumnMap: Record<string, string> = {
+      [OrderSortBy.CREATED_AT]: 'o."createdAt"',
+      [OrderSortBy.UPDATED_AT]: 'o."updatedAt"',
+      [OrderSortBy.TOTAL_AMOUNT]: 'o."totalAmount"',
+      [OrderSortBy.NUMBER_OF_ITEMS]: 'number_of_items',
+      [OrderSortBy.STATUS]: 'o.status',
+      [OrderSortBy.STUDENT_NAME]: 'u."displayName"',
+      [OrderSortBy.PAYMENT_METHOD]: 'payment_source',
+    };
+
+    const sortColumn = sortColumnMap[sortBy] || 'o."createdAt"';
+    const sortDirection = sortOrder === SortOrder.ASC ? 'ASC' : 'DESC';
+
+    const baseQuery = `
+      SELECT 
+        o.id,
+        o."totalAmount",
+        o.status,
+        o."createdAt",
+        o."updatedAt",
+        u."displayName" AS student_name,
+        u."phoneNumber" AS student_phone,
+        (
+          SELECT COUNT(*)::integer FROM "OrderItem" oi WHERE oi."orderId" = o.id
+        ) AS number_of_items,
+        (
+          SELECT COALESCE(
+            jsonb_agg(
+              jsonb_build_object(
+                'id', oi.id,
+                'name', CASE 
+                  WHEN oi."productType" = 'COURSE' THEN c."courseName"
+                  WHEN oi."productType" = 'BOOK' THEN b."bookName"
+                END,
+                'type', oi."productType",
+                'price', oi.price::numeric
+              )
+            ),
+            '[]'::jsonb
+          )
+          FROM "OrderItem" oi
+          LEFT JOIN "Course" c ON c.id = oi."productId" AND oi."productType" = 'COURSE'
+          LEFT JOIN "Book" b ON b.id = oi."productId" AND oi."productType" = 'BOOK'
+          WHERE oi."orderId" = o.id
+        ) AS order_items,
+        (
+          SELECT t."paymentSource"
+          FROM "Transaction" t
+          JOIN "OrderItem" oi ON oi.id = t."orderItemId"
+          WHERE oi."orderId" = o.id AND t."transactionType" = 'ORDER'
+          LIMIT 1
+        ) AS payment_source,
+        CASE WHEN a.id IS NOT NULL THEN
+          jsonb_build_object(
+            'recipientName', a."recipientName",
+            'phoneNumber', a."phoneNumber",
+            'streetAddress', a."streetAddress",
+            'postalCode', a."postalCode",
+            'additionalNotes', a."additionalNotes",
+            'governmentName', g.name,
+            'cityName', ct.name
+          )
+        ELSE NULL END AS shipping_address
+      FROM "Order" o
+      JOIN "Student" s ON s.id = o."studentId"
+      JOIN "User" u ON u.id = s.id
+      LEFT JOIN "Address" a ON a.id = o."shippingAddressId"
+      LEFT JOIN "Government" g ON g.id = a."governmentId"
+      LEFT JOIN "City" ct ON ct.id = a."cityId"
+    `;
+
+    const countQuery = `
+      SELECT COUNT(DISTINCT o.id) as total
+      FROM "Order" o
+      JOIN "Student" s ON s.id = o."studentId"
+      JOIN "User" u ON u.id = s.id
+      LEFT JOIN "Address" a ON a.id = o."shippingAddressId"
+      LEFT JOIN "Government" g ON g.id = a."governmentId"
+      LEFT JOIN "City" ct ON ct.id = a."cityId"
+      LEFT JOIN LATERAL (
+        SELECT t."paymentSource" AS payment_source
+        FROM "Transaction" t
+        JOIN "OrderItem" oi ON oi.id = t."orderItemId"
+        WHERE oi."orderId" = o.id AND t."transactionType" = 'ORDER'
+        LIMIT 1
+      ) ps ON true
+      ${whereClause.replace('payment_source', 'ps.payment_source')}
+    `;
+
+    const dataQuery = `
+      ${baseQuery}
+      ${whereClause}
+      ORDER BY ${sortColumn} ${sortDirection}
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    const dataParams = [...params, pageSize, offset];
+
+    const [countResult, dataResult] = await Promise.all([
+      this.prisma.$queryRawUnsafe<[{ total: bigint }]>(countQuery, ...params),
+      this.prisma.$queryRawUnsafe<any[]>(dataQuery, ...dataParams),
+    ]);
+
+    const total = Number(countResult[0]?.total || 0);
+    const totalPages = Math.ceil(total / pageSize);
+
+    const orders: OrderResponse[] = dataResult.map((row) => {
+      const orderItems: OrderItemResponse[] = (row.order_items || []).map(
+        (item: any) => ({
+          id: Number(item.id),
+          name: item.name,
+          type: item.type as 'COURSE' | 'BOOK',
+          price: Number(item.price),
+        }),
+      );
+
+      let shippingAddress: ShippingAddressResponse | null = null;
+      if (row.shipping_address) {
+        shippingAddress = {
+          recipientName: row.shipping_address.recipientName,
+          phoneNumber: row.shipping_address.phoneNumber,
+          streetAddress: row.shipping_address.streetAddress,
+          postalCode: row.shipping_address.postalCode || null,
+          additionalNotes: row.shipping_address.additionalNotes || null,
+          governmentName: row.shipping_address.governmentName,
+          cityName: row.shipping_address.cityName,
+        };
+      }
+
+      return {
+        id: Number(row.id),
+        studentName: row.student_name,
+        studentPhone: row.student_phone,
+        totalAmount: Number(row.totalAmount),
+        status: row.status,
+        numberOfItems: row.number_of_items,
+        orderItems,
+        paymentMethod: row.payment_source || null,
+        shippingAddress,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      };
+    });
+
+    return {
+      orders,
+      total,
+      totalPages,
+      pageNumber,
+      pageSize,
+    };
+  }
+  async changeOrderStatus(id: number, status: Status) {
+    const order = await this.prisma.order.findUnique({
+      where: { id },
+    });
+    if (!order) {
+      throw new NotFoundException('هذا الطلب غير موجود');
+    }
+    return this.prisma.order.update({
+      where: { id },
+      data: { status },
+    });
   }
 }
