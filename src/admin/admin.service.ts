@@ -934,6 +934,38 @@ export class AdminService {
     });
   }
 
+  async getPlatformSettings(adminId: number) {
+    const [platformSettings, admin] = await Promise.all([
+      this.prisma.platformSetting.findFirst(),
+      this.prisma.user.findUnique({
+        where: {
+          id: adminId,
+          role: 'ADMIN',
+        },
+        select: {
+          displayName: true,
+          phoneNumber: true,
+        },
+      }),
+    ]);
+
+    if (!platformSettings) {
+      throw new NotFoundException('الاعدادات غير موجودة');
+    }
+
+    if (!admin) {
+      throw new NotFoundException('المسؤول غير موجود');
+    }
+
+    return {
+      teacherRegistration: platformSettings.teacherRegistration,
+      platformPercentage: platformSettings.platformPercentage.toNumber(),
+      minimumWithdrawAmount: platformSettings.minimumWithdrawAmount.toNumber(),
+      displayName: admin.displayName,
+      phoneNumber: admin.phoneNumber,
+    };
+  }
+
   async updatePlatformSettings(
     adminId: number,
     settings: UpdatePlatformSettingsDto,
@@ -957,11 +989,39 @@ export class AdminService {
     if (!platformSettings) {
       throw new NotFoundException('الاعدادات غير موجودة');
     }
-    return await this.prisma.platformSetting.update({
-      where: {
-        id: platformSettings.id,
-      },
-      data: settings,
+
+    const { displayName, phoneNumber, password, ...platformData } = settings;
+
+    const adminUserData: any = {};
+    if (displayName) {
+      adminUserData.displayName = displayName;
+    }
+    if (phoneNumber) {
+      adminUserData.phoneNumber = phoneNumber;
+    }
+    if (password) {
+      const bcrypt = await import('bcrypt');
+      adminUserData.password = await bcrypt.hash(password, 10);
+    }
+
+    return await this.prisma.$transaction(async (tx) => {
+      if (Object.keys(adminUserData).length > 0) {
+        await tx.user.update({
+          where: { id: adminId },
+          data: adminUserData,
+        });
+      }
+
+      await tx.platformSetting.update({
+        where: {
+          id: platformSettings.id,
+        },
+        data: platformData,
+      });
+
+      return {
+        message: 'تم تحديث البيانات بنجاح',
+      };
     });
   }
   getAllUsers(getAllUsersDto: GetAllUsersDto) {

@@ -222,7 +222,6 @@ model Admin {
 
 model PlatformSetting {
   id                    Int     @id @default(autoincrement())
-  key                   String  @unique
   teacherRegistration   Boolean @default(true)
   platformPercentage    Decimal @default(0.1) @db.Decimal(3, 2)
   minimumWithdrawAmount Decimal @default(10) @db.Decimal(10, 2)

@@ -7,7 +7,6 @@ import {
   ParseEnumPipe,
   ParseIntPipe,
   Patch,
-  Post,
   Query,
   Req,
 } from '@nestjs/common';
@@ -49,7 +48,12 @@ export class AdminController {
     return this.adminService.processWithdrawal(req.user.id, id, processDto);
   }
 
-  @Post('platform/settings')
+  @Get('platform/settings')
+  getPlatformSettings(@Req() req) {
+    return this.adminService.getPlatformSettings(req.user.id);
+  }
+
+  @Patch('platform/settings')
   updatePlatformSettings(
     @Req() req,
     @Body() settings: UpdatePlatformSettingsDto,
