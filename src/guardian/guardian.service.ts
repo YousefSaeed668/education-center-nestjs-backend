@@ -1,11 +1,15 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PaymentSource } from '@prisma/client';
 import { CartService } from 'src/cart/cart.service';
 import { AddressDto } from 'src/order/dto/address-dto';
+import { OrderService } from 'src/order/order.service';
 import { PrismaService } from 'src/prisma.service';
 import { StudentService } from 'src/student/student.service';
 import { ChooseStudentsDto } from './dto/choose-students.dto';
-import { OrderService } from 'src/order/order.service';
-import { PaymentSource } from '@prisma/client';
 
 @Injectable()
 export class GuardianService {
@@ -28,14 +32,10 @@ export class GuardianService {
     const students = await this.studentService.findStudentsByParentPhone(
       guardian.phoneNumber,
     );
-    if (students.length === 0) {
+    if (students.students.length === 0) {
       throw new NotFoundException('لا يوجد طلاب مرتبطين برقم الهاتف هذا');
     }
-    return {
-      message: 'تم الحصول على الطلاب بنجاح',
-      success: true,
-      data: students,
-    };
+    return students;
   }
   async chooseStudent(guardianId: number, body: ChooseStudentsDto) {
     const students = await this.prisma.student.updateMany({
@@ -96,5 +96,62 @@ export class GuardianService {
   ) {
     await this.verifyStudentBelongsToGuardian(guardianId, studentId);
     return this.studentService.rechargeBalance(studentId, amount);
+  }
+  async getStudents(id: number) {
+    const guardian = await this.prisma.guardian.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        students: {
+          select: {
+            id: true,
+            user: {
+              select: {
+                displayName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!guardian) {
+      throw new NotFoundException('ولي الامر غير موجود');
+    }
+    return {
+      students: guardian.students.map((student) => {
+        return {
+          id: student.id,
+          displayName: student.user.displayName,
+        };
+      }),
+    };
+  }
+
+  async getStudentStatistics(
+    guardianId: number,
+    studentId: number,
+    startDate?: Date | string,
+    endDate?: Date | string,
+  ) {
+    const student = await this.prisma.student.findFirst({
+      where: {
+        id: studentId,
+        guardianId: guardianId,
+        isGuardianVerified: true,
+      },
+    });
+
+    if (!student) {
+      throw new ForbiddenException(
+        'ليس لديك الصلاحية لرؤية احصائيات هذا الطالب',
+      );
+    }
+
+    return this.studentService.getStudentStatistics(
+      studentId,
+      startDate,
+      endDate,
+    );
   }
 }

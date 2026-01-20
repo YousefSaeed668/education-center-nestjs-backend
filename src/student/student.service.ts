@@ -214,11 +214,29 @@ export class StudentService {
     }
   }
   async findStudentsByParentPhone(parentPhoneNumber: string) {
-    return await this.prisma.student.findMany({
+    const students = await this.prisma.student.findMany({
       where: {
         parentPhoneNumber,
+        isGuardianVerified: false,
+        guardianId: null,
+      },
+      select: {
+        id: true,
+        user: {
+          select: {
+            displayName: true,
+            profilePicture: true,
+          },
+        },
       },
     });
+    return {
+      students: students.map((student) => ({
+        id: student.id,
+        displayName: student.user.displayName,
+        profilePicture: student.user.profilePicture,
+      })),
+    };
   }
 
   createWithdrawRequest(studentId: number, body: CreateWithdrawRequestDto) {

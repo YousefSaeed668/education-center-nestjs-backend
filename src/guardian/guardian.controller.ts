@@ -1,25 +1,44 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
+  Param,
   ParseIntPipe,
   Post,
+  Query,
   Req,
-  Param,
-  BadRequestException,
 } from '@nestjs/common';
-import { GuardianService } from './guardian.service';
-import { Roles } from 'src/auth/decorators/roles.decorator';
 import { PaymentSource, Role } from '@prisma/client';
-import { ChooseStudentsDto } from './dto/choose-students.dto';
+import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CreateOrderDto } from 'src/order/dto/address-dto';
+import { GetStudentStatisticsDto } from 'src/student/dto/get-student-statistics.dto';
 import { RechargeBalanceDto } from 'src/student/dto/reacharge-balance.dto';
+import { ChooseStudentsDto } from './dto/choose-students.dto';
+import { GuardianService } from './guardian.service';
 
 @Controller('guardian')
 @Roles(Role.GUARDIAN)
 export class GuardianController {
   constructor(private readonly guardianService: GuardianService) {}
 
+  @Get('/students')
+  getStudents(@Req() req) {
+    return this.guardianService.getStudents(req.user.id);
+  }
+  @Get('student/:studentId/statistics')
+  getStudentStatistics(
+    @Req() req,
+    @Param('studentId', ParseIntPipe) studentId: number,
+    @Query() query: GetStudentStatisticsDto,
+  ) {
+    return this.guardianService.getStudentStatistics(
+      req.user.id,
+      studentId,
+      query.startDate,
+      query.endDate,
+    );
+  }
   @Get('/students-with-parent-number')
   getStudentsWithParentNumber(@Req() req) {
     return this.guardianService.getStudentsWithParentNumber(req.user.id);
