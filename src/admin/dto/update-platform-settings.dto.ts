@@ -1,3 +1,4 @@
+import { Transform } from 'class-transformer';
 import {
   IsBoolean,
   IsNumber,
@@ -14,19 +15,28 @@ import {
 
 export class UpdatePlatformSettingsDto {
   @IsBoolean()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      return value.toLowerCase() === 'true';
+    }
+    return Boolean(value);
+  })
   teacherRegistration: boolean;
 
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0.05)
   @Max(1.0)
+  @Transform(({ value }) => parseFloat(value))
   platformPercentage: number;
 
   @IsNumber()
   @Min(0)
+  @Transform(({ value }) => parseFloat(value))
   minimumWithdrawAmount: number;
 
   @IsNumber()
   @Min(0)
+  @Transform(({ value }) => parseFloat(value))
   minimumRechargeAmount: number;
 
   @IsOptional()

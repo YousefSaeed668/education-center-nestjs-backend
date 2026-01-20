@@ -9,9 +9,13 @@ import {
   Patch,
   Query,
   Req,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ProductType, Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { GetAllUsersDto } from '../user/dto/get-all-users.dto';
 import { AdminService } from './admin.service';
 import { ChangeOrderStatusDto } from './dto/change-order-status.dto';
@@ -54,11 +58,23 @@ export class AdminController {
   }
 
   @Patch('platform/settings')
+  @UseInterceptors(FileInterceptor('profilePicture'))
   updatePlatformSettings(
     @Req() req,
     @Body() settings: UpdatePlatformSettingsDto,
+    @UploadedFile(
+      new ImageValidationPipe({
+        isRequired: false,
+        maxSize: 5 * 1024 * 1024,
+      }),
+    )
+    file: Express.Multer.File,
   ) {
-    return this.adminService.updatePlatformSettings(req.user.id, settings);
+    return this.adminService.updatePlatformSettings(
+      req.user.id,
+      settings,
+      file,
+    );
   }
 
   @Get('all-users')

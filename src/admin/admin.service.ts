@@ -7,6 +7,7 @@ import { ProductType, Status } from '@prisma/client';
 import { BookService } from 'src/book/book.service';
 import { CourseService } from 'src/course/course.service';
 import { PrismaService } from 'src/prisma.service';
+import { S3Service } from 'src/s3/s3.service';
 import { UserService } from 'src/user/user.service';
 import { GetAllUsersDto } from '../user/dto/get-all-users.dto';
 import {
@@ -51,6 +52,7 @@ export class AdminService {
     private readonly courseService: CourseService,
     private readonly bookService: BookService,
     private readonly userService: UserService,
+    private readonly s3Service: S3Service,
   ) {}
   async getAllWithdrawRequests(
     dto: GetAllWithdrawRequestsDto,
@@ -945,6 +947,7 @@ export class AdminService {
         select: {
           displayName: true,
           phoneNumber: true,
+          profilePicture: true,
         },
       }),
     ]);
@@ -963,6 +966,7 @@ export class AdminService {
       minimumWithdrawAmount: platformSettings.minimumWithdrawAmount.toNumber(),
       minimumRechargeAmount: platformSettings.minimumRechargeAmount.toNumber(),
       displayName: admin.displayName,
+      profilePicture: admin.profilePicture,
       phoneNumber: admin.phoneNumber,
     };
   }
@@ -970,60 +974,90 @@ export class AdminService {
   async updatePlatformSettings(
     adminId: number,
     settings: UpdatePlatformSettingsDto,
+    file?: Express.Multer.File,
   ) {
-    const admin = await this.prisma.user.findUnique({
-      where: {
-        id: adminId,
-        role: 'ADMIN',
-      },
-    });
-    if (!admin) {
-      throw new NotFoundException('المسؤول غير موجود');
-    }
+    let newProfilePictureUrl: string | undefined;
+    try {
+      const admin = await this.prisma.user.findUnique({
+        where: {
+          id: adminId,
+          role: 'ADMIN',
+        },
+        select: {
+          profilePicture: true,
+        },
+      });
+      if (!admin) {
+        throw new NotFoundException('المسؤول غير موجود');
+      }
 
-    const platformSettings = await this.prisma.platformSetting.findFirst({
-      select: {
-        id: true,
-      },
-    });
+      const platformSettings = await this.prisma.platformSetting.findFirst({
+        select: {
+          id: true,
+        },
+      });
 
-    if (!platformSettings) {
-      throw new NotFoundException('الاعدادات غير موجودة');
-    }
+      if (!platformSettings) {
+        throw new NotFoundException('الاعدادات غير موجودة');
+      }
 
-    const { displayName, phoneNumber, password, ...platformData } = settings;
+      if (file) {
+        newProfilePictureUrl =
+          await this.userService.handleProfilePictureUpdate(
+            admin.profilePicture || null,
+            file,
+            'admin/profile-picture',
+          );
+      }
 
-    const adminUserData: any = {};
-    if (displayName) {
-      adminUserData.displayName = displayName;
-    }
-    if (phoneNumber) {
-      adminUserData.phoneNumber = phoneNumber;
-    }
-    if (password) {
-      const bcrypt = await import('bcrypt');
-      adminUserData.password = await bcrypt.hash(password, 10);
-    }
+      const { displayName, phoneNumber, password, ...platformData } = settings;
 
-    return await this.prisma.$transaction(async (tx) => {
-      if (Object.keys(adminUserData).length > 0) {
-        await tx.user.update({
-          where: { id: adminId },
-          data: adminUserData,
+      const adminUserData: any = {};
+      if (newProfilePictureUrl) {
+        adminUserData.profilePicture = newProfilePictureUrl;
+      }
+      if (displayName) {
+        adminUserData.displayName = displayName;
+      }
+      if (phoneNumber) {
+        adminUserData.phoneNumber = phoneNumber;
+      }
+      if (password) {
+        const bcrypt = await import('bcrypt');
+        adminUserData.password = await bcrypt.hash(password, 10);
+      }
+
+      return await this.prisma.$transaction(async (tx) => {
+        if (Object.keys(adminUserData).length > 0) {
+          await tx.user.update({
+            where: { id: adminId },
+            data: adminUserData,
+          });
+        }
+
+        await tx.platformSetting.update({
+          where: {
+            id: platformSettings.id,
+          },
+          data: platformData,
+        });
+
+        return {
+          message: 'تم تحديث البيانات بنجاح',
+        };
+      });
+    } catch (error) {
+      if (newProfilePictureUrl && error) {
+        await this.s3Service.deleteFileByUrl(newProfilePictureUrl).catch(() => {
+          console.error(
+            'Failed to cleanup uploaded file:',
+            newProfilePictureUrl,
+          );
         });
       }
 
-      await tx.platformSetting.update({
-        where: {
-          id: platformSettings.id,
-        },
-        data: platformData,
-      });
-
-      return {
-        message: 'تم تحديث البيانات بنجاح',
-      };
-    });
+      throw error;
+    }
   }
   getAllUsers(getAllUsersDto: GetAllUsersDto) {
     return this.userService.getAllUsers(getAllUsersDto);
