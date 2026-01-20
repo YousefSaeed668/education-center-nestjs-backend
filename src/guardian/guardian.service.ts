@@ -127,7 +127,10 @@ export class GuardianService {
       }),
     };
   }
-
+  async getStudentAddresses(guardianId: number, studentId: number) {
+    await this.verifyStudentBelongsToGuardian(guardianId, studentId);
+    return this.studentService.getAddresses(studentId);
+  }
   async getStudentStatistics(
     guardianId: number,
     studentId: number,

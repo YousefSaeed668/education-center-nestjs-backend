@@ -87,4 +87,11 @@ export class GuardianController {
       body.amount,
     );
   }
+  @Get('/student/:studentId/addresses')
+  getStudentAddresses(
+    @Req() req,
+    @Param('studentId', ParseIntPipe) studentId: number,
+  ) {
+    return this.guardianService.getStudentAddresses(req.user.id, studentId);
+  }
 }
