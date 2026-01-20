@@ -6,15 +6,21 @@ import {
   Param,
   ParseIntPipe,
   Post,
+  Put,
   Query,
   Req,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { PaymentSource, Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CreateOrderDto } from 'src/order/dto/address-dto';
+import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { GetStudentStatisticsDto } from 'src/student/dto/get-student-statistics.dto';
 import { RechargeBalanceDto } from 'src/student/dto/reacharge-balance.dto';
 import { ChooseStudentsDto } from './dto/choose-students.dto';
+import { UpdateGuardianProfileDto } from './dto/update-guardian-profile.dto';
 import { GuardianService } from './guardian.service';
 
 @Controller('guardian')
@@ -93,5 +99,27 @@ export class GuardianController {
     @Param('studentId', ParseIntPipe) studentId: number,
   ) {
     return this.guardianService.getStudentAddresses(req.user.id, studentId);
+  }
+
+  @Put('update-profile')
+  @UseInterceptors(FileInterceptor('profilePicture'))
+  updateProfile(
+    @Req() req,
+    @Body() body: UpdateGuardianProfileDto,
+    @UploadedFile(
+      new ImageValidationPipe({
+        isRequired: false,
+        maxSize: 5 * 1024 * 1024,
+        allowedTypes: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+      }),
+    )
+    file: Express.Multer.File,
+  ) {
+    return this.guardianService.updateProfile(req.user.id, body, file);
+  }
+
+  @Get('info-for-update')
+  guardianInfoForUpdate(@Req() req) {
+    return this.guardianService.getGuardianProfileForUpdate(req.user.id);
   }
 }

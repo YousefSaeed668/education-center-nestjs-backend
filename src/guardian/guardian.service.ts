@@ -4,12 +4,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PaymentSource } from '@prisma/client';
+import * as bcrypt from 'bcrypt';
 import { CartService } from 'src/cart/cart.service';
+import { HelperFunctionsService } from 'src/common/services/helperfunctions.service';
 import { AddressDto } from 'src/order/dto/address-dto';
 import { OrderService } from 'src/order/order.service';
 import { PrismaService } from 'src/prisma.service';
+import { S3Service } from 'src/s3/s3.service';
 import { StudentService } from 'src/student/student.service';
+import { UserService } from 'src/user/user.service';
 import { ChooseStudentsDto } from './dto/choose-students.dto';
+import { UpdateGuardianProfileDto } from './dto/update-guardian-profile.dto';
 
 @Injectable()
 export class GuardianService {
@@ -18,6 +23,8 @@ export class GuardianService {
     private readonly studentService: StudentService,
     private readonly cartService: CartService,
     private readonly orderService: OrderService,
+    private readonly userService: UserService,
+    private readonly s3Service: S3Service,
   ) {}
   async getStudentsWithParentNumber(guardianId: number) {
     const guardian = await this.prisma.user.findUnique({
@@ -156,5 +163,87 @@ export class GuardianService {
       startDate,
       endDate,
     );
+  }
+
+  async updateProfile(
+    guardianId: number,
+    body: UpdateGuardianProfileDto,
+    file?: Express.Multer.File,
+  ) {
+    let newProfilePictureUrl: string | undefined;
+    try {
+      if (file) {
+        const currentUser = await this.prisma.user.findUnique({
+          where: { id: guardianId },
+          select: { profilePicture: true },
+        });
+
+        newProfilePictureUrl =
+          await this.userService.handleProfilePictureUpdate(
+            currentUser?.profilePicture || null,
+            file,
+            'guardian/profile-picture',
+          );
+      }
+      const userData = HelperFunctionsService.removeUndefined({
+        profilePicture: newProfilePictureUrl,
+        displayName: body.displayName,
+        phoneNumber: body.phoneNumber,
+        password: body.password
+          ? await bcrypt.hash(body.password, 10)
+          : undefined,
+      });
+
+      await this.prisma.$transaction(async (tx) => {
+        await tx.user.update({
+          where: { id: guardianId },
+          data: {
+            ...userData,
+            ...(body.phoneNumber && {
+              guardian: {
+                update: {
+                  phoneNumber: body.phoneNumber,
+                },
+              },
+            }),
+          },
+        });
+      });
+
+      return {
+        message: 'تم تحديث الملف الشخصي بنجاح',
+      };
+    } catch (error) {
+      if (newProfilePictureUrl && error) {
+        await this.s3Service.deleteFileByUrl(newProfilePictureUrl).catch(() => {
+          console.error(
+            'Failed to cleanup uploaded file:',
+            newProfilePictureUrl,
+          );
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  async getGuardianProfileForUpdate(guardianId: number) {
+    const guardian = await this.prisma.guardian.findUnique({
+      where: {
+        id: guardianId,
+      },
+      select: {
+        phoneNumber: true,
+        user: {
+          select: {
+            displayName: true,
+            phoneNumber: true,
+            profilePicture: true,
+          },
+        },
+      },
+    });
+
+    return guardian;
   }
 }
