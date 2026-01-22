@@ -17,6 +17,7 @@ export class CommentService {
   ) {}
 
   private readonly COMMENTS_PER_PAGE = 10;
+  private readonly MAX_REPLY_DEPTH = 10;
   private readonly REPLIES_PER_PAGE = 10;
 
   private validateCommentOwnership(comment: any, userId: number, role: Role) {
@@ -28,7 +29,26 @@ export class CommentService {
       throw new ForbiddenException('ليس لديك صلاحية لتعديل أو حذف هذا التعليق');
     }
   }
+  private async getCommentDepth(commentId: number): Promise<number> {
+    let depth = 0;
+    let currentCommentId: number | null = commentId;
 
+    while (currentCommentId !== null && depth < this.MAX_REPLY_DEPTH + 1) {
+      const comment = await this.prisma.comment.findUnique({
+        where: { id: currentCommentId },
+        select: { parentCommentId: true },
+      });
+
+      if (!comment || comment.parentCommentId === null) {
+        break;
+      }
+
+      depth++;
+      currentCommentId = comment.parentCommentId;
+    }
+
+    return depth;
+  }
   async deleteComment(userId: number, role: Role, commentId: number) {
     const comment = await this.prisma.comment.findUnique({
       where: { id: commentId },
@@ -140,6 +160,12 @@ export class CommentService {
       });
       if (!parentComment) {
         throw new ForbiddenException('التعليق الرئيسي غير موجود');
+      }
+      const currentDepth = await this.getCommentDepth(body.parentCommentId);
+      if (currentDepth >= this.MAX_REPLY_DEPTH) {
+        throw new ForbiddenException(
+          `لا يمكن الرد على هذا التعليق. الحد الأقصى لعمق الردود هو ${this.MAX_REPLY_DEPTH} مستويات`,
+        );
       }
     }
     await this.prisma.comment.create({

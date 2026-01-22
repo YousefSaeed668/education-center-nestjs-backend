@@ -37,4 +37,16 @@ export class GetTeacherBooksDto {
   @IsOptional()
   @IsString()
   q?: string;
+
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  @Min(0)
+  minPrice?: number;
+
+  @IsNumber()
+  @IsOptional()
+  @Type(() => Number)
+  @Min(0)
+  maxPrice?: number;
 }

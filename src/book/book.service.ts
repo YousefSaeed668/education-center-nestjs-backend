@@ -430,7 +430,15 @@ export class BookService {
   }
 
   async getBooksForTeacher(teacherId: number, query: GetTeacherBooksDto) {
-    const { sortBy, sortOrder, pageNumber = 1, pageSize = 20, q } = query;
+    const {
+      sortBy,
+      sortOrder,
+      pageNumber = 1,
+      pageSize = 20,
+      q,
+      minPrice,
+      maxPrice,
+    } = query;
 
     const skip = (pageNumber - 1) * pageSize;
 
@@ -438,6 +446,14 @@ export class BookService {
 
     if (q) {
       whereConditions.push(`b."bookName" ILIKE '%${q}%'`);
+    }
+
+    if (minPrice !== undefined) {
+      whereConditions.push(`b.price >= ${minPrice}`);
+    }
+
+    if (maxPrice !== undefined) {
+      whereConditions.push(`b.price <= ${maxPrice}`);
     }
 
     const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
@@ -476,48 +492,48 @@ export class BookService {
           totalRevenue: number;
         }[]
       >(`
-        WITH book_revenue AS (
-          SELECT 
-            oi."productId" as book_id,
-            ROUND(COALESCE(SUM(t."teacherShare"), 0)::numeric, 2)::float as total_revenue
-          FROM "OrderItem" oi
-          INNER JOIN "Transaction" t ON t."orderItemId" = oi.id
-          WHERE oi."productType" = 'BOOK'
-          GROUP BY oi."productId"
-        )
+      WITH book_revenue AS (
         SELECT 
-          b.id,
-          b."bookName",
-          b.price::float as price,
-          b."createdAt",
-          jsonb_build_object('id', g.id, 'name', g.name) as "grade",
-          COALESCE(
-            jsonb_agg(
-              DISTINCT jsonb_build_object('id', d.id, 'name', d.name)
-            ) FILTER (WHERE d.id IS NOT NULL),
-            '[]'::jsonb
-          ) as "Division",
-          COALESCE(br.total_revenue, 0)::float as "totalRevenue"
-        FROM "Book" b
-        INNER JOIN "Grade" g ON b."gradeId" = g.id
-        LEFT JOIN "_BookToDivision" bd ON b.id = bd."A"
-        LEFT JOIN "Division" d ON bd."B" = d.id
-        LEFT JOIN book_revenue br ON b.id = br.book_id
-        ${whereClause}
-        GROUP BY 
-          b.id, 
-          b."bookName", 
-          b.price, 
-          b."createdAt",
-          g.id,
-          g.name,
-          br.total_revenue
-        ${orderByClause}
-        LIMIT ${pageSize} OFFSET ${skip}
-      `),
+          oi."productId" as book_id,
+          ROUND(COALESCE(SUM(t."teacherShare"), 0)::numeric, 2)::float as total_revenue
+        FROM "OrderItem" oi
+        INNER JOIN "Transaction" t ON t."orderItemId" = oi.id
+        WHERE oi."productType" = 'BOOK'
+        GROUP BY oi."productId"
+      )
+      SELECT 
+        b.id,
+        b."bookName",
+        b.price::float as price,
+        b."createdAt",
+        jsonb_build_object('id', g.id, 'name', g.name) as "grade",
+        COALESCE(
+          jsonb_agg(
+            DISTINCT jsonb_build_object('id', d.id, 'name', d.name)
+          ) FILTER (WHERE d.id IS NOT NULL),
+          '[]'::jsonb
+        ) as "Division",
+        COALESCE(br.total_revenue, 0)::float as "totalRevenue"
+      FROM "Book" b
+      INNER JOIN "Grade" g ON b."gradeId" = g.id
+      LEFT JOIN "_BookToDivision" bd ON b.id = bd."A"
+      LEFT JOIN "Division" d ON bd."B" = d.id
+      LEFT JOIN book_revenue br ON b.id = br.book_id
+      ${whereClause}
+      GROUP BY 
+        b.id, 
+        b."bookName", 
+        b.price, 
+        b."createdAt",
+        g.id,
+        g.name,
+        br.total_revenue
+      ${orderByClause}
+      LIMIT ${pageSize} OFFSET ${skip}
+    `),
       this.prisma.$queryRawUnsafe<{ count: bigint }[]>(`
-        SELECT COUNT(*) as count FROM "Book" b ${whereClause}
-      `),
+      SELECT COUNT(*) as count FROM "Book" b ${whereClause}
+    `),
     ]);
 
     const total = Number(countResult[0]?.count || 0);
