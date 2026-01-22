@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -21,6 +22,8 @@ import { CommentService } from './comment.service';
 import { AddCommentDto } from './dto/add-comment.dto';
 import { UpdateCommentDto } from './dto/update-comment.dto';
 
+@ApiTags('comment')
+@ApiBearerAuth('accessToken')
 @Controller('comment')
 @Roles(Role.STUDENT, Role.TEACHER)
 export class CommentController {

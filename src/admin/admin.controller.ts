@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ProductType, Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
@@ -26,6 +27,8 @@ import { GetDashboardStatisticsDto } from './dto/get-dashboard-statistics.dto';
 import { ProcessWithdrawRequestDto } from './dto/process-withdraw-request.dto';
 import { UpdatePlatformSettingsDto } from './dto/update-platform-settings.dto';
 
+@ApiTags('admin')
+@ApiBearerAuth('accessToken')
 @Controller('admin')
 @Roles(Role.ADMIN)
 export class AdminController {

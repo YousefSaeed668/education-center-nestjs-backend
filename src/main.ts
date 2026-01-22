@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationError } from 'class-validator';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/Filters/AllExceptionsFilter';
@@ -9,6 +10,7 @@ import { MultipartValidationPipe } from './pipes/multipart-validation.pipe';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+
   app.useGlobalPipes(
     new MultipartValidationPipe({
       whitelist: true,
@@ -43,6 +45,33 @@ async function bootstrap() {
       },
     }),
   );
+
+  const config = new DocumentBuilder()
+    .setTitle('Nile Elite')
+    .setDescription('Nile Elite Education Center API')
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+      },
+      'accessToken',
+    )
+    .build();
+  const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : ['http://localhost:3000'];
+
+  app.enableCors({
+    origin: allowedOrigins,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Accept, Authorization, refresh',
+    credentials: true,
+  });
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
 
   app.useGlobalFilters(new PrismaExceptionFilter(), new AllExceptionsFilter());
   app.useGlobalInterceptors(new ResponseInterceptor());

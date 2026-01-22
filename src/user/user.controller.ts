@@ -1,10 +1,13 @@
 import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role, WithdrawUserType } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CreateWithdrawRequestDto } from './dto/create-withdraw-request.dto';
 import { GetWithdrawRequestsDto } from './dto/get-withdrawal-requests.dto';
 import { UserService } from './user.service';
 
+@ApiTags('user')
+@ApiBearerAuth('accessToken')
 @Controller('user')
 export class UserController {
   constructor(private readonly userService: UserService) {}

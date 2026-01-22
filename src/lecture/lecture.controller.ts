@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
@@ -22,6 +23,8 @@ import { GetTeacherLecturesDto } from './dto/get-teacher-lectures.dto';
 import { UpdateLectureDto } from './dto/update-lecture.dto';
 import { LectureService } from './lecture.service';
 
+@ApiTags('lecture')
+@ApiBearerAuth('accessToken')
 @Controller('lecture')
 export class LectureController {
   constructor(private readonly lectureService: LectureService) {}

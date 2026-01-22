@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AdminModule } from './admin/admin.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -26,6 +27,23 @@ import { UserModule } from './user/user.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
+    ThrottlerModule.forRoot([
+      {
+        name: 'short',
+        ttl: 1000,
+        limit: 3,
+      },
+      {
+        name: 'medium',
+        ttl: 10000,
+        limit: 20,
+      },
+      {
+        name: 'long',
+        ttl: 60000,
+        limit: 100,
+      },
+    ]),
     UserModule,
     AuthModule,
     TeacherModule,

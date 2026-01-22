@@ -10,6 +10,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CreateQuizDto } from './dto/create-quiz.dto';
@@ -19,6 +20,8 @@ import { SubmitQuizDto } from './dto/submit-quiz.dto';
 import { UpdateQuizDto } from './dto/update-quiz.dto';
 import { QuizService } from './quiz.service';
 
+@ApiTags('quiz')
+@ApiBearerAuth('accessToken')
 @Controller('quiz')
 export class QuizController {
   constructor(private readonly quizService: QuizService) {}

@@ -8,11 +8,14 @@ import {
   Put,
   Req,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CartService } from './cart.service';
 import { CartParamsDto, UpdateQuantityDto } from './dto/cart-param.dto';
 
+@ApiTags('cart')
+@ApiBearerAuth('accessToken')
 @Controller('cart')
 @Roles(Role.STUDENT)
 export class CartController {

@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { PaymentSource, Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { CreateOrderDto } from 'src/order/dto/address-dto';
@@ -23,6 +24,8 @@ import { ChooseStudentsDto } from './dto/choose-students.dto';
 import { UpdateGuardianProfileDto } from './dto/update-guardian-profile.dto';
 import { GuardianService } from './guardian.service';
 
+@ApiTags('guardian')
+@ApiBearerAuth('accessToken')
 @Controller('guardian')
 @Roles(Role.GUARDIAN)
 export class GuardianController {

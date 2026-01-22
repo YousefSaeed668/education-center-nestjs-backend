@@ -13,6 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -23,6 +24,8 @@ import { GetBooksDto } from './dto/get-books.dto';
 import { GetTeacherBooksDto } from './dto/get-teacher-books.dto';
 import { UpdateBookDto } from './dto/update-book-dto';
 
+@ApiTags('book')
+@ApiBearerAuth('accessToken')
 @Controller('book')
 export class BookController {
   constructor(private readonly bookService: BookService) {}

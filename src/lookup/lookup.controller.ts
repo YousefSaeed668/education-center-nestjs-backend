@@ -1,9 +1,11 @@
 import { Controller, Get, Param, ParseEnumPipe, Query } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { ProductType } from '@prisma/client';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { GetSignUpDataDto, SettingType } from './dto/get-signup-data.dto';
 import { LookupService } from './lookup.service';
 
+@ApiTags('lookup')
 @Public()
 @Controller('lookup')
 export class LookupController {

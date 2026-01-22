@@ -11,6 +11,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { GetFinancialStatisticsDto } from 'src/admin/dto/get-financial-statistics.dto';
 import { Public } from 'src/auth/decorators/public.decorator';
@@ -20,6 +21,8 @@ import { GetTeachersDto } from './dto/get-teachers.dto';
 import { UpdateTeacherProfileDto } from './dto/update-teacher-profile.dto';
 import { TeacherService } from './teacher.service';
 
+@ApiTags('teacher')
+@ApiBearerAuth('accessToken')
 @Controller('teacher')
 export class TeacherController {
   constructor(private readonly teacherService: TeacherService) {}

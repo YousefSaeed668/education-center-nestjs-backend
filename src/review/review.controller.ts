@@ -10,6 +10,7 @@ import {
   Query,
   Req,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ProductType, Role } from '@prisma/client';
 import { Public } from 'src/auth/decorators/public.decorator';
 import { Roles } from 'src/auth/decorators/roles.decorator';
@@ -17,6 +18,8 @@ import { AddReviewDto } from './dto/add-review.dto';
 import { UpdateReviewDto } from './dto/update-review.dto';
 import { ReviewService } from './review.service';
 
+@ApiTags('review')
+@ApiBearerAuth('accessToken')
 @Controller('review')
 export class ReviewController {
   constructor(private readonly reviewService: ReviewService) {}

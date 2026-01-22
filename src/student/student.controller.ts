@@ -10,6 +10,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
@@ -21,6 +22,8 @@ import { RechargeBalanceDto } from './dto/reacharge-balance.dto';
 import { UpdateStudentProfileDto } from './dto/update-student-profile.dto';
 import { StudentService } from './student.service';
 
+@ApiTags('student')
+@ApiBearerAuth('accessToken')
 @Controller('student')
 @Roles(Role.STUDENT)
 export class StudentController {

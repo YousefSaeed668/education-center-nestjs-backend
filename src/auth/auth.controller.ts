@@ -8,6 +8,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { ImageValidationPipe } from 'src/pipes/file-validation.pipe';
 import { AuthService } from './auth.service';
 import { Public } from './decorators/public.decorator';
@@ -19,6 +20,7 @@ import {
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RefreshAuthGuard } from './guards/refresh-auth.guard';
 
+@ApiTags('auth')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -92,6 +94,7 @@ export class AuthController {
     return this.authService.refreshToken(req.user.id);
   }
 
+  @ApiBearerAuth('accessToken')
   @Post('/signout')
   signOut(@Req() req) {
     return this.authService.signOut(req.user.id);
